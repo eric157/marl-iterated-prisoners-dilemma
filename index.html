@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Trust Lab: Iterated Prisoner's Dilemma</title>
+  <title>Trust Lab | Cooperation Simulator</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Alegreya:wght@500;700;800&family=Manrope:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
     rel="stylesheet"
   />
   <link rel="stylesheet" href="assets/styles.css" />
@@ -15,180 +15,227 @@
   <script type="module" src="assets/app.js" defer></script>
 </head>
 <body>
-  <div class="noise-bg"></div>
+  <div class="page-grain"></div>
 
-  <header class="hero">
-    <div class="hero-inner">
-      <p class="eyebrow">Interactive Trust Simulator</p>
-      <h1>Why Do People Cooperate or Betray?</h1>
-      <p class="subtitle">
-        This page is a simple lab where digital agents repeatedly choose to <strong>cooperate</strong> or <strong>defect</strong>.
-        You can change settings, run experiments, and immediately see how trust grows, breaks, or recovers.
+  <header class="masthead">
+    <div class="masthead-inner">
+      <p class="kicker">Interactive Public Dashboard</p>
+      <h1>Trust Lab: Why Cooperation Survives</h1>
+      <p class="lead">
+        A plain-language simulator for the <strong>Iterated Prisoner's Dilemma (IPD)</strong>. You can change conditions, run agents,
+        and see when trust grows, when it fails, and why.
       </p>
-      <div class="hero-tags">
-        <span>IPD = Iterated Prisoner's Dilemma</span>
-        <span>MARL = Multi-Agent Reinforcement Learning</span>
-        <span>Runs fully in your browser</span>
+      <div class="term-strip">
+        <span><strong>IPD</strong>: Iterated Prisoner's Dilemma</span>
+        <span><strong>MARL</strong>: Multi-Agent Reinforcement Learning</span>
+        <span><strong>TFT</strong>: Tit For Tat</span>
       </div>
+      <nav class="jump-nav">
+        <a href="#start">Run Lab</a>
+        <a href="#results">Read Results</a>
+        <a href="#compare">Compare Runs</a>
+      </nav>
     </div>
   </header>
 
-  <main class="container">
-    <section class="panel">
-      <h2>Start Here (Non-Technical)</h2>
-      <div class="info-grid">
-        <article class="info-card">
-          <h3>The Game</h3>
-          <p>Two players choose each round:</p>
-          <p><strong>Cooperate</strong> (help both) or <strong>Defect</strong> (try to exploit).</p>
-          <p>One round pushes toward defection. Repeated rounds can make cooperation rational.</p>
+  <main class="layout">
+    <section class="panel primer">
+      <h2>Start Here</h2>
+      <p class="section-intro">
+        One round encourages selfish behavior. Repeated rounds create consequences. That shift is where cooperation can emerge.
+      </p>
+      <div class="primer-grid">
+        <article class="mini-card">
+          <h3>What Players Choose</h3>
+          <p><strong>Cooperate</strong> means short-term restraint for mutual gain.</p>
+          <p><strong>Defect</strong> means short-term advantage by exploiting trust.</p>
         </article>
-        <article class="info-card">
-          <h3>What You Control</h3>
-          <p>You pick number of rounds, noise (mistakes), memory length, and learning behavior.</p>
-          <p>Then click <strong>Start Simulation</strong> and watch trust metrics update live.</p>
+        <article class="mini-card">
+          <h3>Why Repetition Matters</h3>
+          <p>If players meet again, betrayal can be punished and trust can be rewarded.</p>
+          <p>This is why long relationships behave differently from one-shot encounters.</p>
         </article>
-        <article class="info-card">
-          <h3>What You Learn</h3>
-          <p>When does cooperation emerge? When does it collapse into mutual punishment?</p>
-          <p>Use the comparison panel to test "before vs after" settings side-by-side.</p>
+        <article class="mini-card">
+          <h3>How to Use This</h3>
+          <p>Pick a starter mode, run once, change one variable, run again.</p>
+          <p>Use side-by-side comparison to see what actually changed.</p>
         </article>
       </div>
-      <p class="muted">Tip: First run with defaults, then only change one setting at a time for clear comparisons.</p>
+    </section>
+
+    <section class="panel story-panel">
+      <h2>Real-Life Examples (Simple)</h2>
+      <div class="story-grid">
+        <article class="story-card">
+          <h3>Neighbors Sharing Water</h3>
+          <p>Both save water: both benefit long term.</p>
+          <p>One cheats while the other cooperates: trust breaks quickly.</p>
+        </article>
+        <article class="story-card">
+          <h3>Trade Between Countries</h3>
+          <p>Both keep fair tariffs: stable growth.</p>
+          <p>One side suddenly defects with sanctions/tariffs: retaliation cycle begins.</p>
+        </article>
+        <article class="story-card">
+          <h3>Election Norms</h3>
+          <p>All parties respect rules: institutions stay strong.</p>
+          <p>Norm-breaking for short-term gain can trap everyone in mutual damage.</p>
+        </article>
+      </div>
+      <div class="payoff-note">
+        <strong>Core payoff logic:</strong> mutual cooperation beats mutual defection over time, even if defection can win briefly.
+      </div>
     </section>
 
     <section class="panel">
-      <h2>Agent Guide (Who Is Who)</h2>
+      <h2>Meet the Agents</h2>
+      <p class="section-intro">These are the personalities running in the background.</p>
       <div class="agent-grid">
-        <article class="agent-card"><h3>Q-learning Agent</h3><p>Learns from reward over time. It starts uncertain and adapts strategy based on experience.</p></article>
-        <article class="agent-card"><h3>Always Cooperate (AllC)</h3><p>Always chooses cooperation. Kind, but easy to exploit.</p></article>
-        <article class="agent-card"><h3>Always Defect (AllD)</h3><p>Always betrays. Strong in one-shot play, often poor long-term socially.</p></article>
-        <article class="agent-card"><h3>Tit For Tat (TFT)</h3><p>Starts nice, then copies your last move. Cooperative but retaliatory.</p></article>
-        <article class="agent-card"><h3>Grim Trigger</h3><p>Cooperates until betrayed once, then defects forever.</p></article>
-        <article class="agent-card"><h3>Copykitten</h3><p>Defects only after two consecutive betrayals. More forgiving under noise.</p></article>
-        <article class="agent-card"><h3>Random</h3><p>Chooses cooperate/defect randomly. Unpredictable baseline.</p></article>
+        <article class="agent-card"><h3>Q-learning Agent</h3><p>Learns from experience and reward. Behavior changes over time.</p></article>
+        <article class="agent-card"><h3>Always Cooperate (AllC)</h3><p>Always trusts. Works with good actors, loses to exploiters.</p></article>
+        <article class="agent-card"><h3>Always Defect (AllD)</h3><p>Always betrays. Wins some short-term rounds, harms long-term ecosystems.</p></article>
+        <article class="agent-card"><h3>Tit For Tat (TFT)</h3><p>Starts cooperative, then mirrors your last move.</p></article>
+        <article class="agent-card"><h3>Grim Trigger</h3><p>Cooperates until one betrayal, then defects forever.</p></article>
+        <article class="agent-card"><h3>Copykitten</h3><p>Forgives one mistake; retaliates after repeated betrayal.</p></article>
+        <article class="agent-card"><h3>Random</h3><p>Unpredictable behavior used as a baseline.</p></article>
       </div>
     </section>
 
-    <section class="panel controls">
-      <h2>Experiment Controls</h2>
-      <form id="runForm">
-        <div class="grid">
-          <label>
-            Episodes
-            <input type="number" id="episodes" min="50" max="50000" value="2000" />
-            <span class="hint">How many complete training cycles to run.</span>
-          </label>
-          <label>
-            Rounds per Episode
-            <input type="number" id="rounds" min="20" max="1000" value="120" />
-            <span class="hint">How many repeated interactions happen inside one episode.</span>
-          </label>
-          <label>
-            Memory Length
-            <input type="number" id="memory" min="1" max="5" value="1" />
-            <span class="hint">How many previous rounds the state remembers.</span>
-          </label>
-          <label>
-            Noise (0-0.25)
-            <input type="number" id="noise" min="0" max="0.25" step="0.01" value="0.01" />
-            <span class="hint">Chance that an intended action flips by mistake.</span>
-          </label>
-          <label>
-            Learning Rate (alpha)
-            <input type="number" id="alpha" min="0.01" max="1" step="0.01" value="0.1" />
-            <span class="hint">How fast the Q-learning agent updates beliefs.</span>
-          </label>
-          <label>
-            Discount Factor (gamma)
-            <input type="number" id="gamma" min="0.1" max="0.999" step="0.01" value="0.95" />
-            <span class="hint">How much future reward matters vs immediate reward.</span>
-          </label>
-          <label>
-            Exploration Start (epsilon)
-            <input type="number" id="epsilon" min="0" max="1" step="0.01" value="1" />
-            <span class="hint">Initial randomness in decisions.</span>
-          </label>
-          <label>
-            Exploration Decay
-            <input type="number" id="epsilonDecay" min="0.9" max="1" step="0.0001" value="0.9992" />
-            <span class="hint">How quickly random exploration decreases.</span>
-          </label>
-          <label>
-            Minimum Exploration (epsilon min)
-            <input type="number" id="epsilonMin" min="0" max="1" step="0.01" value="0.02" />
-            <span class="hint">Minimum randomness kept forever.</span>
-          </label>
-          <label>
-            Random Seed
-            <input type="number" id="seed" min="1" max="999999999" value="42" />
-            <span class="hint">Use the same seed to reproduce similar runs.</span>
-          </label>
-        </div>
+    <section class="panel controls" id="start">
+      <div class="control-layout">
+        <aside class="preset-panel">
+          <h3>Starter Modes</h3>
+          <p class="muted">One click presets for non-technical users.</p>
+          <button type="button" class="preset-btn" data-preset="first_run">First Run (Recommended)</button>
+          <button type="button" class="preset-btn" data-preset="high_trust">Long-Term Trust</button>
+          <button type="button" class="preset-btn" data-preset="short_term">Short-Term Selfish</button>
+          <button type="button" class="preset-btn" data-preset="high_noise">Miscommunication Stress Test</button>
+        </aside>
 
-        <fieldset>
-          <legend>Core Experiments</legend>
-          <div class="chips">
-            <label><input type="checkbox" value="q_vs_allc" checked /> Q-learning vs Always Cooperate (AllC)</label>
-            <label><input type="checkbox" value="q_vs_alld" checked /> Q-learning vs Always Defect (AllD)</label>
-            <label><input type="checkbox" value="q_vs_random" checked /> Q-learning vs Random</label>
-            <label><input type="checkbox" value="q_vs_tft" checked /> Q-learning vs Tit For Tat (TFT)</label>
-            <label><input type="checkbox" value="q_vs_grim" checked /> Q-learning vs Grim Trigger</label>
-            <label><input type="checkbox" value="q_vs_q" checked /> Q-learning vs Q-learning</label>
+        <div>
+          <h2>Run the Simulation</h2>
+          <p class="section-intro">Adjust settings manually or choose a starter mode.</p>
+          <form id="runForm">
+            <div class="grid">
+              <label>
+                Episodes
+                <input type="number" id="episodes" min="50" max="50000" value="2000" />
+                <span class="hint">How many training cycles to run.</span>
+              </label>
+              <label>
+                Rounds per Episode
+                <input type="number" id="rounds" min="20" max="1000" value="120" />
+                <span class="hint">How many interactions happen per cycle.</span>
+              </label>
+              <label>
+                Memory Length
+                <input type="number" id="memory" min="1" max="5" value="1" />
+                <span class="hint">How much recent history agents can remember.</span>
+              </label>
+              <label>
+                Noise
+                <input type="number" id="noise" min="0" max="0.25" step="0.01" value="0.01" />
+                <span class="hint">Chance an intended action flips by mistake.</span>
+              </label>
+              <label>
+                Learning Rate (alpha)
+                <input type="number" id="alpha" min="0.01" max="1" step="0.01" value="0.1" />
+                <span class="hint">How fast the learner updates beliefs.</span>
+              </label>
+              <label>
+                Discount Factor (gamma)
+                <input type="number" id="gamma" min="0.1" max="0.999" step="0.01" value="0.95" />
+                <span class="hint">How much future outcomes matter.</span>
+              </label>
+              <label>
+                Exploration Start (epsilon)
+                <input type="number" id="epsilon" min="0" max="1" step="0.01" value="1" />
+                <span class="hint">Initial randomness in decisions.</span>
+              </label>
+              <label>
+                Exploration Decay
+                <input type="number" id="epsilonDecay" min="0.9" max="1" step="0.0001" value="0.9992" />
+                <span class="hint">How quickly randomness drops over time.</span>
+              </label>
+              <label>
+                Minimum Exploration
+                <input type="number" id="epsilonMin" min="0" max="1" step="0.01" value="0.02" />
+                <span class="hint">Minimum randomness kept permanently.</span>
+              </label>
+              <label>
+                Random Seed
+                <input type="number" id="seed" min="1" max="999999999" value="42" />
+                <span class="hint">Use the same seed to replay similar runs.</span>
+              </label>
+            </div>
+
+            <fieldset>
+              <legend>Core Matchups</legend>
+              <div class="chips">
+                <label><input type="checkbox" value="q_vs_allc" checked /> Q-learning vs Always Cooperate (AllC)</label>
+                <label><input type="checkbox" value="q_vs_alld" checked /> Q-learning vs Always Defect (AllD)</label>
+                <label><input type="checkbox" value="q_vs_random" checked /> Q-learning vs Random</label>
+                <label><input type="checkbox" value="q_vs_tft" checked /> Q-learning vs Tit For Tat (TFT)</label>
+                <label><input type="checkbox" value="q_vs_grim" checked /> Q-learning vs Grim Trigger</label>
+                <label><input type="checkbox" value="q_vs_q" checked /> Q-learning vs Q-learning</label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Extra Modules</legend>
+              <div class="chips">
+                <label><input type="checkbox" id="enablePopulation" checked /> Population mode (10 agents)</label>
+                <label><input type="checkbox" id="enableSweeps" checked /> Parameter sweeps (gamma/noise/memory)</label>
+                <label><input type="checkbox" id="enableTournament" checked /> Baseline strategy tournament</label>
+              </div>
+            </fieldset>
+
+            <div class="row actions">
+              <button class="btn primary" id="runBtn" type="submit">Start Simulation</button>
+              <button class="btn ghost" id="cancelBtn" type="button" disabled>Cancel</button>
+              <button class="btn ghost" id="downloadBtn" type="button" disabled>Download Results (JSON)</button>
+            </div>
+          </form>
+
+          <div class="progress-wrap">
+            <div class="progress-bar"><span id="progressFill"></span></div>
+            <p id="progressText">Idle</p>
           </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Optional Modules</legend>
-          <div class="chips">
-            <label><input type="checkbox" id="enablePopulation" checked /> Population mode (10 learning agents)</label>
-            <label><input type="checkbox" id="enableSweeps" checked /> Parameter tests (gamma/noise/memory)</label>
-            <label><input type="checkbox" id="enableTournament" checked /> Classic strategy tournament</label>
-          </div>
-        </fieldset>
-
-        <div class="row actions">
-          <button class="btn primary" id="runBtn" type="submit">Start Simulation</button>
-          <button class="btn ghost" id="cancelBtn" type="button" disabled>Cancel</button>
-          <button class="btn ghost" id="downloadBtn" type="button" disabled>Download Results (JSON)</button>
         </div>
-      </form>
-
-      <div class="progress-wrap">
-        <div class="progress-bar"><span id="progressFill"></span></div>
-        <p id="progressText">Idle</p>
       </div>
     </section>
 
-    <section class="panel">
-      <h2>Quick Results</h2>
-      <p class="muted">Simple summary from the latest run. Higher cooperation means more trust-oriented behavior.</p>
+    <section class="panel" id="results">
+      <h2>Run Summary</h2>
+      <p class="section-intro">Fast interpretation of the latest run. Higher trust rate means more cooperation.</p>
       <div id="summaryCards" class="summary-grid"></div>
     </section>
 
     <section class="panel">
-      <h2>How Behavior Changes Over Time</h2>
+      <h2>Behavior Over Time</h2>
       <div class="row">
         <label>
-          Choose Experiment
+          Select Matchup
           <select id="experimentSelect"></select>
         </label>
       </div>
       <div class="chart-grid">
         <div>
-          <h3>Cooperation Rate per Episode</h3>
+          <h3>Trust Rate by Episode</h3>
           <canvas id="coopChart"></canvas>
+          <p class="chart-note">If this trends up and stays high, cooperation is stabilizing.</p>
         </div>
         <div>
-          <h3>Average Joint Reward per Episode</h3>
+          <h3>Average Reward by Episode</h3>
           <canvas id="rewardChart"></canvas>
+          <p class="chart-note">Sustained higher reward typically indicates healthier long-run dynamics.</p>
         </div>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Classic Strategy Leaderboard</h2>
-      <p class="muted">All baseline strategies play one another. This shows which style performs best on average.</p>
+      <h2>Strategy Tournament</h2>
+      <p class="section-intro">Every baseline strategy plays every other strategy.</p>
       <table id="leaderboardTable">
         <thead>
           <tr>
@@ -203,8 +250,8 @@
     </section>
 
     <section class="panel">
-      <h2>Setting Sensitivity (What Changes Outcomes)</h2>
-      <p class="muted">These charts test how outcomes shift when key settings are changed.</p>
+      <h2>What Changes Outcomes Most?</h2>
+      <p class="section-intro">Sensitivity tests for discount factor, noise, and memory.</p>
       <div class="chart-grid">
         <div>
           <h3>Tail Cooperation</h3>
@@ -218,14 +265,14 @@
     </section>
 
     <section class="panel">
-      <h2>Advanced: Q-Table Snapshot</h2>
-      <p class="muted">Q-table = the learner's internal scorebook for "state + action" values.</p>
+      <h2>Advanced View: Q-Table</h2>
+      <p class="section-intro">Internal state-action value map learned by a Q-learning agent.</p>
       <pre id="qTableView">Run an experiment to populate Q-values.</pre>
     </section>
 
-    <section class="panel">
-      <h2>Run Comparison (Side-by-Side)</h2>
-      <p class="muted">Compare any two saved browser runs to see how your setting changes affected outcomes.</p>
+    <section class="panel" id="compare">
+      <h2>Side-by-Side Run Comparison</h2>
+      <p class="section-intro">Compare two saved browser runs to see exactly what changed.</p>
       <div class="row compare-row">
         <label>Run A <select id="compareA"></select></label>
         <label>Run B <select id="compareB"></select></label>
@@ -233,20 +280,20 @@
       <div id="compareMetrics" class="compare-grid"></div>
     </section>
 
-    <section class="panel">
-      <h2>What Happens in the Background</h2>
+    <section class="panel process-panel">
+      <h2>What We Do in the Background</h2>
       <ol class="flow-list">
-        <li>Agents repeatedly play Cooperate/Defect using the same payoff rules.</li>
-        <li>Rewards are computed from the Prisoner's Dilemma matrix after each round.</li>
-        <li>Learning agents update their strategy values (Q-learning updates).</li>
-        <li>Your browser draws the charts and stores run history locally for comparison.</li>
+        <li>Agents repeatedly choose cooperate or defect using the same payoff rules.</li>
+        <li>Rewards are calculated after each round.</li>
+        <li>Learning agents update Q-values and adapt behavior episode by episode.</li>
+        <li>Your browser renders charts and stores run history locally for comparison.</li>
       </ol>
-      <p class="muted">No server is required: this simulation runs entirely on your device.</p>
+      <p class="muted">This site is fully static. No backend server is required.</p>
     </section>
   </main>
 
   <footer class="footer">
-    Trust Lab · Static GitHub Pages app · Browser-side simulation via Web Worker
+    Trust Lab Dashboard · Built for public understanding and research experimentation
   </footer>
 </body>
 </html>

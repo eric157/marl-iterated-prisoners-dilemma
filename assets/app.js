@@ -27,6 +27,7 @@ const elements = {
   enablePopulation: document.getElementById("enablePopulation"),
   enableSweeps: document.getElementById("enableSweeps"),
   enableTournament: document.getElementById("enableTournament"),
+  presetButtons: Array.from(document.querySelectorAll(".preset-btn[data-preset]")),
 };
 
 const palette = {
@@ -70,6 +71,65 @@ const state = {
   },
 };
 
+const PRESET_CONFIGS = {
+  first_run: {
+    episodes: 2000,
+    rounds: 120,
+    memory: 1,
+    noise: 0.01,
+    alpha: 0.1,
+    gamma: 0.95,
+    epsilon: 1,
+    epsilonDecay: 0.9992,
+    epsilonMin: 0.02,
+    enablePopulation: true,
+    enableSweeps: true,
+    enableTournament: true,
+  },
+  high_trust: {
+    episodes: 3200,
+    rounds: 150,
+    memory: 1,
+    noise: 0.01,
+    alpha: 0.1,
+    gamma: 0.99,
+    epsilon: 1,
+    epsilonDecay: 0.9994,
+    epsilonMin: 0.02,
+    enablePopulation: true,
+    enableSweeps: true,
+    enableTournament: true,
+  },
+  short_term: {
+    episodes: 1800,
+    rounds: 110,
+    memory: 1,
+    noise: 0.01,
+    alpha: 0.12,
+    gamma: 0.3,
+    epsilon: 1,
+    epsilonDecay: 0.999,
+    epsilonMin: 0.03,
+    enablePopulation: true,
+    enableSweeps: true,
+    enableTournament: true,
+  },
+  high_noise: {
+    episodes: 2600,
+    rounds: 130,
+    memory: 1,
+    noise: 0.1,
+    alpha: 0.1,
+    gamma: 0.95,
+    epsilon: 1,
+    epsilonDecay: 0.9992,
+    epsilonMin: 0.02,
+    enablePopulation: true,
+    enableSweeps: true,
+    enableTournament: true,
+  },
+};
+
 function friendlyExperimentName(name) {
   return EXPERIMENT_LABELS[name] ?? name;
 }
@@ -97,6 +157,9 @@ function bindEvents() {
   elements.experimentSelect.addEventListener("change", renderSelectedExperiment);
   elements.compareA.addEventListener("change", renderCompare);
   elements.compareB.addEventListener("change", renderCompare);
+  elements.presetButtons.forEach((btn) => {
+    btn.addEventListener("click", () => applyPreset(btn.dataset.preset));
+  });
 }
 
 function getSelectedExperiments() {
@@ -186,7 +249,7 @@ function handleWorkerMessage(event) {
   const payload = event.data;
   if (!payload || typeof payload !== "object") return;
   if (payload.type === "progress") {
-    setProgress(payload.progress ?? 0, payload.message ?? "Running...");
+    setProgress(payload.progress ?? 0, friendlyProgressMessage(payload.message ?? "Running..."));
     return;
   }
   if (payload.type === "error") {
@@ -210,10 +273,10 @@ function setProgress(percent, text) {
 }
 
 function initCharts() {
-  state.charts.coop = createLineChart("coopChart", "Cooperation");
-  state.charts.reward = createLineChart("rewardChart", "Joint Reward");
-  state.charts.sweepCoop = createMultiLineChart("sweepCoopChart", "Tail Cooperation");
-  state.charts.sweepReward = createMultiLineChart("sweepRewardChart", "Tail Reward");
+  state.charts.coop = createLineChart("coopChart", "Trust Rate");
+  state.charts.reward = createLineChart("rewardChart", "Average Reward");
+  state.charts.sweepCoop = createMultiLineChart("sweepCoopChart", "Final Trust Rate");
+  state.charts.sweepReward = createMultiLineChart("sweepRewardChart", "Final Average Reward");
 }
 
 function createLineChart(canvasId, yTitle) {
@@ -274,6 +337,7 @@ function renderSummary(result) {
           <p>Trust rate (last segment): ${asPercent(coop)}</p>
           <p>Final trust rate: ${asPercent(final)}</p>
           <p>Average reward (last segment): ${rew.toFixed(3)}</p>
+          <p>${interpretTrust(coop)}</p>
         </article>
       `;
     })
@@ -287,6 +351,7 @@ function renderSummary(result) {
         <p>Trust rate (last segment): ${asPercent(pop.tailCooperation ?? 0)}</p>
         <p>Average reward (last segment): ${(pop.tailReward ?? 0).toFixed(3)}</p>
         <p>Episodes run: ${pop.episodes}</p>
+        <p>${interpretTrust(pop.tailCooperation ?? 0)}</p>
       </article>
     `
       : "";
@@ -310,11 +375,11 @@ function renderSelectedExperiment() {
   const labels = points.map((p) => p.episode);
 
   state.charts.coop.data.labels = labels;
-  state.charts.coop.data.datasets = [makeDataset(name, palette.primary, points, "cooperation")];
+  state.charts.coop.data.datasets = [makeDataset(friendlyExperimentName(name), palette.primary, points, "cooperation")];
   state.charts.coop.update();
 
   state.charts.reward.data.labels = labels;
-  state.charts.reward.data.datasets = [makeDataset(name, palette.amber, points, "jointReward")];
+  state.charts.reward.data.datasets = [makeDataset(friendlyExperimentName(name), palette.amber, points, "jointReward")];
   state.charts.reward.update();
 }
 
@@ -461,6 +526,57 @@ function metricPair(name, a, b, options = {}) {
       <p class="${cls}">Delta: ${dText}</p>
     </article>
   `;
+}
+
+function applyPreset(presetKey) {
+  const preset = PRESET_CONFIGS[presetKey];
+  if (!preset) return;
+  elements.episodes.value = preset.episodes;
+  elements.rounds.value = preset.rounds;
+  elements.memory.value = preset.memory;
+  elements.noise.value = preset.noise;
+  elements.alpha.value = preset.alpha;
+  elements.gamma.value = preset.gamma;
+  elements.epsilon.value = preset.epsilon;
+  elements.epsilonDecay.value = preset.epsilonDecay;
+  elements.epsilonMin.value = preset.epsilonMin;
+  elements.enablePopulation.checked = preset.enablePopulation;
+  elements.enableSweeps.checked = preset.enableSweeps;
+  elements.enableTournament.checked = preset.enableTournament;
+  setProgress(0, `Preset loaded: ${presetLabel(presetKey)}. Click Start Simulation.`);
+}
+
+function presetLabel(key) {
+  if (key === "first_run") return "First Run";
+  if (key === "high_trust") return "Long-Term Trust";
+  if (key === "short_term") return "Short-Term Selfish";
+  if (key === "high_noise") return "Miscommunication Stress Test";
+  return key;
+}
+
+function interpretTrust(value) {
+  const v = Number(value ?? 0);
+  if (v >= 0.75) return "Interpretation: strong cooperative equilibrium.";
+  if (v >= 0.55) return "Interpretation: mixed but mostly cooperative behavior.";
+  if (v >= 0.35) return "Interpretation: unstable balance between trust and betrayal.";
+  return "Interpretation: defection-heavy dynamics.";
+}
+
+function friendlyProgressMessage(message) {
+  const map = {
+    "Running Q_vs_AllC...": "Running: Q-learning vs Always Cooperate...",
+    "Running Q_vs_AllD...": "Running: Q-learning vs Always Defect...",
+    "Running Q_vs_Random...": "Running: Q-learning vs Random...",
+    "Running Q_vs_TFT...": "Running: Q-learning vs Tit For Tat...",
+    "Running Q_vs_Grim...": "Running: Q-learning vs Grim Trigger...",
+    "Running Q_vs_Q...": "Running: Q-learning vs Q-learning...",
+    "Running gamma sweep...": "Testing discount factor impact...",
+    "Running noise sweep...": "Testing miscommunication impact...",
+    "Running memory sweep...": "Testing memory length impact...",
+    "Running baseline tournament...": "Running strategy tournament...",
+    "Running population simulation...": "Running population simulation...",
+  };
+  return map[message] ?? message;
 }
 
 function renderCompare() {
