@@ -69,10 +69,6 @@ Users can adjust parameters, run experiments, compare runs side-by-side, and dow
 └─ .nojekyll
 ```
 
-## Deployment
-
-This repo is configured for GitHub Pages via GitHub Actions (`.github/workflows/pages.yml`).
-Push to `main` and GitHub will deploy automatically.
 
 ## Offline Experiments
 
