@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPD MARL Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
+  <script type="module" src="assets/app.js" defer></script>
+</head>
+<body>
+  <div class="noise-bg"></div>
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">Interactive MARL Research Playground</p>
+      <h1>Emergence of Cooperation in Iterated Prisoner's Dilemma</h1>
+      <p class="subtitle">
+        Tune parameters, choose experiments, run agents in the background worker, and inspect results in real time.
+      </p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="panel controls">
+      <h2>Experiment Controls</h2>
+      <form id="runForm">
+        <div class="grid">
+          <label>
+            Episodes
+            <input type="number" id="episodes" min="50" max="50000" value="2000" />
+          </label>
+          <label>
+            Rounds / Episode
+            <input type="number" id="rounds" min="20" max="1000" value="120" />
+          </label>
+          <label>
+            Memory
+            <input type="number" id="memory" min="1" max="5" value="1" />
+          </label>
+          <label>
+            Noise (0-0.25)
+            <input type="number" id="noise" min="0" max="0.25" step="0.01" value="0.01" />
+          </label>
+          <label>
+            Alpha
+            <input type="number" id="alpha" min="0.01" max="1" step="0.01" value="0.1" />
+          </label>
+          <label>
+            Gamma
+            <input type="number" id="gamma" min="0.1" max="0.999" step="0.01" value="0.95" />
+          </label>
+          <label>
+            Epsilon (initial)
+            <input type="number" id="epsilon" min="0" max="1" step="0.01" value="1" />
+          </label>
+          <label>
+            Epsilon Decay
+            <input type="number" id="epsilonDecay" min="0.9" max="1" step="0.0001" value="0.9992" />
+          </label>
+          <label>
+            Epsilon Min
+            <input type="number" id="epsilonMin" min="0" max="1" step="0.01" value="0.02" />
+          </label>
+          <label>
+            Seed
+            <input type="number" id="seed" min="1" max="999999999" value="42" />
+          </label>
+        </div>
+
+        <fieldset>
+          <legend>Core Experiments</legend>
+          <div class="chips">
+            <label><input type="checkbox" value="q_vs_allc" checked /> Q vs AllC</label>
+            <label><input type="checkbox" value="q_vs_alld" checked /> Q vs AllD</label>
+            <label><input type="checkbox" value="q_vs_random" checked /> Q vs Random</label>
+            <label><input type="checkbox" value="q_vs_tft" checked /> Q vs TFT</label>
+            <label><input type="checkbox" value="q_vs_grim" checked /> Q vs Grim</label>
+            <label><input type="checkbox" value="q_vs_q" checked /> Q vs Q</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Advanced</legend>
+          <div class="chips">
+            <label><input type="checkbox" id="enablePopulation" checked /> Run population experiment (10 agents)</label>
+            <label><input type="checkbox" id="enableSweeps" checked /> Run gamma/noise/memory sweeps</label>
+            <label><input type="checkbox" id="enableTournament" checked /> Baseline tournament</label>
+          </div>
+        </fieldset>
+
+        <div class="row actions">
+          <button class="btn primary" id="runBtn" type="submit">Run Experiments</button>
+          <button class="btn ghost" id="cancelBtn" type="button" disabled>Cancel</button>
+          <button class="btn ghost" id="downloadBtn" type="button" disabled>Download JSON</button>
+        </div>
+      </form>
+
+      <div class="progress-wrap">
+        <div class="progress-bar"><span id="progressFill"></span></div>
+        <p id="progressText">Idle</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Run Summary</h2>
+      <div id="summaryCards" class="summary-grid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Episode Dynamics</h2>
+      <div class="row">
+        <label>
+          Experiment
+          <select id="experimentSelect"></select>
+        </label>
+      </div>
+      <div class="chart-grid">
+        <div>
+          <h3>Cooperation vs Episode</h3>
+          <canvas id="coopChart"></canvas>
+        </div>
+        <div>
+          <h3>Joint Reward vs Episode</h3>
+          <canvas id="rewardChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Baseline Tournament</h2>
+      <table id="leaderboardTable">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Strategy</th>
+            <th>Mean Reward</th>
+            <th>Mean Cooperation</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Parameter Sweeps</h2>
+      <div class="chart-grid">
+        <div>
+          <h3>Tail Cooperation</h3>
+          <canvas id="sweepCoopChart"></canvas>
+        </div>
+        <div>
+          <h3>Tail Reward</h3>
+          <canvas id="sweepRewardChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Q-Table Snapshot</h2>
+      <p class="muted">Q-values shown for selected experiment (first Q-agent found).</p>
+      <pre id="qTableView">Run an experiment to populate Q-values.</pre>
+    </section>
+
+    <section class="panel">
+      <h2>Run Comparison</h2>
+      <p class="muted">Compares current and past browser runs (stored locally in this browser).</p>
+      <div class="row compare-row">
+        <label>Run A <select id="compareA"></select></label>
+        <label>Run B <select id="compareB"></select></label>
+      </div>
+      <div id="compareMetrics" class="compare-grid"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Pure static app for GitHub Pages. Simulation engine runs in a Web Worker; no server required.
+  </footer>
+</body>
+</html>
