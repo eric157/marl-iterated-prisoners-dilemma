@@ -79,4 +79,4 @@ Push to `main` and GitHub will deploy automatically.
 The original offline/Python experimentation stack has been moved into a **separate repository workspace** so this Pages repo stays clean and web-focused.
 
 Local workspace path:
-`C:\Users\ericp\OneDrive - ericthomas15\Desktop\marl-iterated-prisoners-dilemma-offline`
+https://github.com/eric157/marl-iterated-prisoners-dilemma-offline
