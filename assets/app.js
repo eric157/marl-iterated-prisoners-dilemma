@@ -39,6 +39,24 @@ const palette = {
   slate: "#93a4b8",
 };
 
+const EXPERIMENT_LABELS = {
+  Q_vs_AllC: "Q-learning vs Always Cooperate (AllC)",
+  Q_vs_AllD: "Q-learning vs Always Defect (AllD)",
+  Q_vs_Random: "Q-learning vs Random",
+  Q_vs_TFT: "Q-learning vs Tit For Tat (TFT)",
+  Q_vs_Grim: "Q-learning vs Grim Trigger",
+  Q_vs_Q: "Q-learning vs Q-learning",
+};
+
+const STRATEGY_LABELS = {
+  ALLC: "Always Cooperate (AllC)",
+  ALLD: "Always Defect (AllD)",
+  RANDOM: "Random",
+  TFT: "Tit For Tat (TFT)",
+  GRIM: "Grim Trigger",
+  COPYKITTEN: "Copykitten",
+};
+
 const state = {
   worker: null,
   running: false,
@@ -51,6 +69,18 @@ const state = {
     sweepReward: null,
   },
 };
+
+function friendlyExperimentName(name) {
+  return EXPERIMENT_LABELS[name] ?? name;
+}
+
+function friendlyStrategyName(name) {
+  return STRATEGY_LABELS[name] ?? name;
+}
+
+function asPercent(value) {
+  return `${(Number(value ?? 0) * 100).toFixed(1)}%`;
+}
 
 function init() {
   initCharts();
@@ -235,15 +265,15 @@ function renderSummary(result) {
   const entries = Object.entries(result.summary?.experiments ?? {});
   const cards = entries
     .map(([name, metrics]) => {
-      const coop = (metrics.tailCooperation ?? 0).toFixed(3);
-      const rew = (metrics.tailReward ?? 0).toFixed(3);
-      const final = (metrics.finalCooperation ?? 0).toFixed(3);
+      const coop = Number(metrics.tailCooperation ?? 0);
+      const rew = Number(metrics.tailReward ?? 0);
+      const final = Number(metrics.finalCooperation ?? 0);
       return `
         <article class="summary-card">
-          <h4>${name}</h4>
-          <p>Tail coop: ${coop}</p>
-          <p>Tail reward: ${rew}</p>
-          <p>Final coop: ${final}</p>
+          <h4>${friendlyExperimentName(name)}</h4>
+          <p>Trust rate (last segment): ${asPercent(coop)}</p>
+          <p>Final trust rate: ${asPercent(final)}</p>
+          <p>Average reward (last segment): ${rew.toFixed(3)}</p>
         </article>
       `;
     })
@@ -253,10 +283,10 @@ function renderSummary(result) {
     pop && Number(pop.episodes) > 0
       ? `
       <article class="summary-card">
-        <h4>Population_Q_vs_Q</h4>
-        <p>Tail coop: ${(pop.tailCooperation ?? 0).toFixed(3)}</p>
-        <p>Tail reward: ${(pop.tailReward ?? 0).toFixed(3)}</p>
-        <p>Episodes: ${pop.episodes}</p>
+        <h4>Population Mode (10 Q-learning agents)</h4>
+        <p>Trust rate (last segment): ${asPercent(pop.tailCooperation ?? 0)}</p>
+        <p>Average reward (last segment): ${(pop.tailReward ?? 0).toFixed(3)}</p>
+        <p>Episodes run: ${pop.episodes}</p>
       </article>
     `
       : "";
@@ -265,7 +295,9 @@ function renderSummary(result) {
 
 function renderExperimentSelector(result) {
   const names = Object.keys(result.experiments ?? {});
-  elements.experimentSelect.innerHTML = names.map((name) => `<option value="${name}">${name}</option>`).join("");
+  elements.experimentSelect.innerHTML = names
+    .map((name) => `<option value="${name}">${friendlyExperimentName(name)}</option>`)
+    .join("");
 }
 
 function renderSelectedExperiment() {
@@ -293,9 +325,9 @@ function renderTournament(result) {
       (row) => `
       <tr>
         <td>${row.rank}</td>
-        <td>${row.strategy}</td>
+        <td>${friendlyStrategyName(row.strategy)}</td>
         <td>${row.meanReward.toFixed(3)}</td>
-        <td>${row.meanCooperation.toFixed(3)}</td>
+        <td>${asPercent(row.meanCooperation)}</td>
       </tr>
     `
     )
@@ -319,7 +351,7 @@ function renderSweeps(result) {
     state.charts.sweepCoop.data.labels = labels;
     state.charts.sweepReward.data.labels = labels;
     coopDatasets.push({
-      label: name,
+      label: name === "gamma" ? "Discount Factor (gamma)" : name === "noise" ? "Noise" : "Memory",
       borderColor: colorMap[name] ?? palette.slate,
       pointRadius: 3,
       borderWidth: 2,
@@ -327,7 +359,7 @@ function renderSweeps(result) {
       data: points.map((p) => p.tailCooperation),
     });
     rewardDatasets.push({
-      label: name,
+      label: name === "gamma" ? "Discount Factor (gamma)" : name === "noise" ? "Noise" : "Memory",
       borderColor: colorMap[name] ?? palette.slate,
       pointRadius: 3,
       borderWidth: 2,
@@ -392,9 +424,7 @@ function appendRunHistory(result) {
 }
 
 function refreshCompareSelectors() {
-  const options = state.runHistory
-    .map((run) => `<option value="${run.id}">${run.id} (ep:${run.config.episodes})</option>`)
-    .join("");
+  const options = state.runHistory.map((run) => `<option value="${run.id}">${formatRunLabel(run)}</option>`).join("");
   elements.compareA.innerHTML = options;
   elements.compareB.innerHTML = options;
   if (state.runHistory.length) {
@@ -403,22 +433,32 @@ function refreshCompareSelectors() {
   }
 }
 
+function formatRunLabel(run) {
+  const t = new Date(run.createdAt);
+  const stamp = Number.isNaN(t.getTime()) ? run.id : t.toLocaleString();
+  return `${stamp} | ep:${run.config.episodes}, rounds:${run.config.rounds}, noise:${run.config.noise}`;
+}
+
 function getRunById(id) {
   return state.runHistory.find((run) => run.id === id);
 }
 
-function metricPair(name, a, b) {
+function metricPair(name, a, b, options = {}) {
+  const asPct = Boolean(options.percent);
   const av = Number(a ?? 0);
   const bv = Number(b ?? 0);
   const delta = av - bv;
   const cls = delta >= 0 ? "pos" : "neg";
   const sign = delta >= 0 ? "+" : "";
+  const aText = asPct ? asPercent(av) : av.toFixed(3);
+  const bText = asPct ? asPercent(bv) : bv.toFixed(3);
+  const dText = asPct ? `${sign}${(delta * 100).toFixed(1)}%` : `${sign}${delta.toFixed(3)}`;
   return `
     <article class="compare-card">
       <h4>${name}</h4>
-      <p>Run A: ${av.toFixed(3)}</p>
-      <p>Run B: ${bv.toFixed(3)}</p>
-      <p class="${cls}">Delta: ${sign}${delta.toFixed(3)}</p>
+      <p>Run A: ${aText}</p>
+      <p>Run B: ${bText}</p>
+      <p class="${cls}">Delta: ${dText}</p>
     </article>
   `;
 }
@@ -438,11 +478,11 @@ function renderCompare() {
   const popB = runB.summary?.population ?? {};
 
   elements.compareMetrics.innerHTML = [
-    metricPair("Q_vs_Q Tail Cooperation", qA.tailCooperation, qB.tailCooperation),
-    metricPair("Q_vs_Q Tail Reward", qA.tailReward, qB.tailReward),
-    metricPair("Q_vs_AllD Tail Cooperation", allDA.tailCooperation, allDB.tailCooperation),
-    metricPair("Population Tail Cooperation", popA.tailCooperation, popB.tailCooperation),
-    metricPair("Population Tail Reward", popA.tailReward, popB.tailReward),
+    metricPair("Q-learning vs Q-learning: Trust Rate", qA.tailCooperation, qB.tailCooperation, { percent: true }),
+    metricPair("Q-learning vs Q-learning: Reward", qA.tailReward, qB.tailReward),
+    metricPair("Q-learning vs Always Defect: Trust Rate", allDA.tailCooperation, allDB.tailCooperation, { percent: true }),
+    metricPair("Population Mode: Trust Rate", popA.tailCooperation, popB.tailCooperation, { percent: true }),
+    metricPair("Population Mode: Reward", popA.tailReward, popB.tailReward),
   ].join("");
 }
 

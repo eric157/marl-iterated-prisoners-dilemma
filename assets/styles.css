@@ -8,6 +8,7 @@
   --amber: #f2b65c;
   --teal: #2ec4b6;
   --red: #ff6b6b;
+  --blue: #6c8bff;
 }
 
 * {
@@ -57,8 +58,26 @@ h1 {
 }
 
 .subtitle {
-  max-width: 760px;
+  max-width: 880px;
   color: #c6ccbf;
+}
+
+.hero-tags {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.hero-tags span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(8, 15, 25, 0.66);
+  border: 1px solid rgba(242, 182, 92, 0.26);
+  color: #d8dfd2;
+  font-size: 0.74rem;
 }
 
 .container {
@@ -92,9 +111,47 @@ h3 {
   color: #cfd4c9;
 }
 
+p {
+  line-height: 1.5;
+}
+
+.info-grid,
+.agent-grid,
+.summary-grid,
+.chart-grid,
+.compare-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.info-grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.agent-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.info-card,
+.agent-card,
+.summary-card,
+.compare-card {
+  border: 1px solid rgba(242, 182, 92, 0.24);
+  border-radius: 10px;
+  background: rgba(8, 15, 25, 0.55);
+  padding: 0.75rem;
+}
+
+.info-card p,
+.agent-card p {
+  margin: 0.25rem 0;
+  color: #c8cebf;
+  font-size: 0.85rem;
+}
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 0.7rem;
 }
 
@@ -103,6 +160,12 @@ label {
   gap: 0.35rem;
   font-size: 0.78rem;
   color: #ced4c8;
+}
+
+.hint {
+  color: #9ea9b7;
+  font-size: 0.69rem;
+  line-height: 1.35;
 }
 
 input,
@@ -221,33 +284,24 @@ legend {
 }
 
 .summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
-.summary-card {
-  border: 1px solid rgba(242, 182, 92, 0.24);
-  border-radius: 10px;
-  background: rgba(8, 15, 25, 0.55);
-  padding: 0.65rem;
-}
-
-.summary-card h4 {
+.summary-card h4,
+.compare-card h4 {
   margin: 0 0 0.4rem;
   font-size: 0.85rem;
 }
 
-.summary-card p {
+.summary-card p,
+.compare-card p {
   margin: 0.2rem 0;
   color: #c5cbbe;
   font-size: 0.78rem;
 }
 
 .chart-grid {
-  display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 0.75rem;
 }
 
 canvas {
@@ -303,27 +357,7 @@ pre {
 
 .compare-grid {
   margin-top: 0.7rem;
-  display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.7rem;
-}
-
-.compare-card {
-  border: 1px solid rgba(242, 182, 92, 0.24);
-  border-radius: 10px;
-  background: rgba(8, 15, 25, 0.58);
-  padding: 0.65rem;
-}
-
-.compare-card h4 {
-  margin: 0 0 0.4rem;
-  font-size: 0.82rem;
-}
-
-.compare-card p {
-  margin: 0.2rem 0;
-  font-size: 0.76rem;
-  color: #c7cebf;
 }
 
 .pos {
@@ -332,6 +366,15 @@ pre {
 
 .neg {
   color: var(--red);
+}
+
+.flow-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #d5dbcf;
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.85rem;
 }
 
 .footer {
@@ -347,5 +390,14 @@ pre {
 @media (max-width: 720px) {
   canvas {
     height: 230px !important;
+  }
+
+  .hero {
+    padding-top: 3.2rem;
+  }
+
+  .chips label {
+    width: 100%;
+    justify-content: flex-start;
   }
 }
