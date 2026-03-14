@@ -11,6 +11,8 @@ const elements = {
   summaryCards: document.getElementById("summaryCards"),
   experimentSelect: document.getElementById("experimentSelect"),
   leaderboardBody: document.querySelector("#leaderboardTable tbody"),
+  leagueTableBody: document.querySelector("#leagueTable tbody"),
+  leagueMeta: document.getElementById("leagueMeta"),
   qTableView: document.getElementById("qTableView"),
   compareA: document.getElementById("compareA"),
   compareB: document.getElementById("compareB"),
@@ -37,6 +39,7 @@ const elements = {
   enablePopulation: document.getElementById("enablePopulation"),
   enableSweeps: document.getElementById("enableSweeps"),
   enableTournament: document.getElementById("enableTournament"),
+  enableLeague: document.getElementById("enableLeague"),
   presetButtons: Array.from(document.querySelectorAll(".preset-btn[data-preset]")),
 };
 
@@ -102,6 +105,7 @@ const PRESET_CONFIGS = {
     enablePopulation: true,
     enableSweeps: true,
     enableTournament: true,
+    enableLeague: true,
   },
   high_trust: {
     episodes: 3200,
@@ -123,6 +127,29 @@ const PRESET_CONFIGS = {
     enablePopulation: true,
     enableSweeps: true,
     enableTournament: true,
+    enableLeague: true,
+  },
+  offline_best: {
+    episodes: 6000,
+    rounds: 150,
+    memory: 1,
+    noise: 0.01,
+    alpha: 0.16,
+    gamma: 0.95,
+    epsilon: 1,
+    epsilonDecay: 0.9994,
+    epsilonMin: 0,
+    learningMode: "oaq",
+    prosocialWeight: 0.4,
+    negativeAlphaScale: 0.5,
+    coopBonus: 0.02,
+    exploitPenalty: 0.1,
+    tieBreak: "cooperate",
+    optimisticInit: 0.8,
+    enablePopulation: true,
+    enableSweeps: true,
+    enableTournament: true,
+    enableLeague: true,
   },
   short_term: {
     episodes: 1800,
@@ -144,6 +171,7 @@ const PRESET_CONFIGS = {
     enablePopulation: true,
     enableSweeps: true,
     enableTournament: true,
+    enableLeague: true,
   },
   high_noise: {
     episodes: 2600,
@@ -165,6 +193,7 @@ const PRESET_CONFIGS = {
     enablePopulation: true,
     enableSweeps: true,
     enableTournament: true,
+    enableLeague: true,
   },
 };
 
@@ -178,6 +207,18 @@ function friendlyStrategyName(name) {
 
 function asPercent(value) {
   return `${(Number(value ?? 0) * 100).toFixed(1)}%`;
+}
+
+function learningModeLabel(mode) {
+  if (mode === "prosocial") return "Cooperative Q-learning";
+  if (mode === "oaq") return "Opponent-Aware Q-learning (OAQ)";
+  return "Classic Q-learning";
+}
+
+function learningModeShortLabel(mode) {
+  if (mode === "prosocial") return "coop-Q";
+  if (mode === "oaq") return "oaq";
+  return "classic-Q";
 }
 
 function init() {
@@ -232,6 +273,7 @@ function getRunConfig() {
     enablePopulation: elements.enablePopulation.checked,
     enableSweeps: elements.enableSweeps.checked,
     enableTournament: elements.enableTournament.checked,
+    enableLeague: elements.enableLeague.checked,
   };
   return cfg;
 }
@@ -246,10 +288,10 @@ function validateConfig(cfg) {
   if (cfg.memory < 1 || cfg.memory > 5) {
     throw new Error("Memory must be in [1,5].");
   }
-  if (!["classic", "prosocial"].includes(cfg.learningMode)) {
-    throw new Error("Learning mode must be classic or prosocial.");
+  if (!["classic", "prosocial", "oaq"].includes(cfg.learningMode)) {
+    throw new Error("Learning mode must be classic, prosocial, or OAQ.");
   }
-  if (cfg.learningMode === "prosocial" && (cfg.prosocialWeight < 0 || cfg.prosocialWeight > 0.8)) {
+  if (cfg.learningMode !== "classic" && (cfg.prosocialWeight < 0 || cfg.prosocialWeight > 0.8)) {
     throw new Error("Prosocial weight must be in [0, 0.8].");
   }
 }
@@ -264,7 +306,7 @@ function getOptimizationSearch() {
 }
 
 function syncLearningControls() {
-  const prosocial = elements.learningMode.value === "prosocial";
+  const prosocial = elements.learningMode.value !== "classic";
   const ids = ["prosocialWeight", "negativeAlphaScale", "coopBonus", "exploitPenalty"];
   ids.forEach((id) => {
     const el = elements[id];
@@ -448,6 +490,7 @@ function renderResult(result) {
   renderExperimentSelector(result);
   renderSelectedExperiment();
   renderTournament(result);
+  renderLeague(result);
   renderSweeps(result);
   renderQTable(result);
 }
@@ -460,7 +503,7 @@ function renderSummary(result) {
     <article class="summary-card summary-highlight">
       <h4>Run Quality Score</h4>
       <p><strong>${overall.toFixed(2)} / 100</strong></p>
-      <p>Learning mode: ${mode === "prosocial" ? "Cooperative Q-learning" : "Classic Q-learning"}</p>
+      <p>Learning mode: ${learningModeLabel(mode)}</p>
       <p>${overall >= 72 ? "Strong long-run cooperation profile." : overall >= 55 ? "Moderate cooperation profile." : "Defection pressure remains high."}</p>
     </article>
   `;
@@ -493,6 +536,22 @@ function renderSummary(result) {
       </article>
     `
       : "";
+  const league = result.league;
+  const leagueSummary = result.summary?.league;
+  const leagueCard =
+    league && Number(league.trainingSummary?.episodes) > 0
+      ? `
+      <article class="summary-card">
+        <h4>League Training (Mixed Opponents)</h4>
+        <p>League score: ${Number(leagueSummary?.leagueScore ?? league.leagueScore ?? 0).toFixed(2)}</p>
+        <p>Training trust (tail): ${asPercent(leagueSummary?.tailCooperation ?? league.trainingSummary?.tailCooperation ?? 0)}</p>
+        <p>Training reward (tail): ${Number(leagueSummary?.tailReward ?? league.trainingSummary?.tailReward ?? 0).toFixed(3)}</p>
+        <p>Self-play trust after league: ${asPercent(
+          league.evaluation?.find((row) => row.key === "self")?.tailCooperation ?? 0
+        )}</p>
+      </article>
+    `
+      : "";
   const opt = result.optimization;
   const optCard = opt
     ? `
@@ -501,12 +560,12 @@ function renderSummary(result) {
         <p>Objective: ${formatObjective(opt.objective)}</p>
         <p>Trials tested: ${opt.trials}</p>
         <p>Best search score: ${Number(opt.bestScore ?? 0).toFixed(2)}</p>
-        <p>Best mode: ${opt.bestConfig?.learningMode === "prosocial" ? "Cooperative Q-learning" : "Classic Q-learning"}</p>
+        <p>Best mode: ${learningModeLabel(opt.bestConfig?.learningMode)}</p>
         <p>alpha=${Number(opt.bestConfig?.alpha ?? 0).toFixed(3)}, gamma=${Number(opt.bestConfig?.gamma ?? 0).toFixed(3)}</p>
       </article>
     `
     : "";
-  elements.summaryCards.innerHTML = headCard + cards + popCard + optCard;
+  elements.summaryCards.innerHTML = headCard + cards + popCard + leagueCard + optCard;
 }
 
 function renderExperimentSelector(result) {
@@ -548,6 +607,53 @@ function renderTournament(result) {
     `
     )
     .join("");
+}
+
+function friendlyLeagueOpponent(key) {
+  if (key === "self") return "Self-play";
+  if (key === "allc") return "Always Cooperate (AllC)";
+  if (key === "alld") return "Always Defect (AllD)";
+  if (key === "random") return "Random";
+  if (key === "tft") return "Tit For Tat (TFT)";
+  if (key === "grim") return "Grim Trigger";
+  if (key === "copykitten") return "Copykitten";
+  return key ?? "Unknown";
+}
+
+function renderLeague(result) {
+  if (!elements.leagueTableBody || !elements.leagueMeta) return;
+  const league = result.league;
+  if (
+    !league ||
+    Number(league.trainingSummary?.episodes ?? 0) <= 0 ||
+    !Array.isArray(league.evaluation) ||
+    !league.evaluation.length
+  ) {
+    elements.leagueTableBody.innerHTML = "";
+    elements.leagueMeta.textContent = "League not run in this simulation. Enable League training and run again.";
+    return;
+  }
+
+  elements.leagueTableBody.innerHTML = league.evaluation
+    .map((row) => {
+      const key = String(row.key || "").toLowerCase();
+      return `
+      <tr>
+        <td>${friendlyLeagueOpponent(key)}</td>
+        <td>${asPercent(row.tailCooperation)}</td>
+        <td>${Number(row.tailReward ?? 0).toFixed(3)}</td>
+      </tr>
+    `;
+    })
+    .join("");
+
+  const t = league.trainingSummary ?? {};
+  const counts = Object.entries(t.opponentCounts ?? {})
+    .map(([k, v]) => `${friendlyLeagueOpponent(k)}: ${v}`)
+    .join(" · ");
+  elements.leagueMeta.textContent = `League score: ${Number(league.leagueScore ?? 0).toFixed(2)} | Training tail trust: ${asPercent(
+    t.tailCooperation
+  )} | Training tail reward: ${Number(t.tailReward ?? 0).toFixed(3)}${counts ? ` | Opponent mix: ${counts}` : ""}`;
 }
 
 function renderSweeps(result) {
@@ -653,7 +759,7 @@ function refreshCompareSelectors() {
 function formatRunLabel(run) {
   const t = new Date(run.createdAt);
   const stamp = Number.isNaN(t.getTime()) ? run.id : t.toLocaleString();
-  const mode = run.config?.learningMode === "prosocial" ? "coop-Q" : "classic-Q";
+  const mode = learningModeShortLabel(run.config?.learningMode);
   const score = deriveOverallScore(run.summary).toFixed(1);
   return `${stamp} | ${mode} | score:${score} | ep:${run.config.episodes}, rounds:${run.config.rounds}, noise:${run.config.noise}`;
 }
@@ -732,6 +838,7 @@ function applyPreset(presetKey) {
   elements.enablePopulation.checked = preset.enablePopulation;
   elements.enableSweeps.checked = preset.enableSweeps;
   elements.enableTournament.checked = preset.enableTournament;
+  elements.enableLeague.checked = preset.enableLeague !== false;
   syncLearningControls();
   setProgress(0, `Preset loaded: ${presetLabel(presetKey)}. Click Start Simulation.`);
 }
@@ -739,6 +846,7 @@ function applyPreset(presetKey) {
 function presetLabel(key) {
   if (key === "first_run") return "First Run";
   if (key === "high_trust") return "Long-Term Trust";
+  if (key === "offline_best") return "Offline Best (OAQ)";
   if (key === "short_term") return "Short-Term Selfish";
   if (key === "high_noise") return "Miscommunication Stress Test";
   return key;
@@ -771,6 +879,8 @@ function friendlyProgressMessage(message) {
     "Running memory sweep...": "Testing memory length impact...",
     "Running baseline tournament...": "Running strategy tournament...",
     "Running population simulation...": "Running population simulation...",
+    "Running league training...": "Training against mixed opponents (league mode)...",
+    "Running league evaluation...": "Evaluating league-trained policy...",
   };
   if (message.startsWith("Auto-optimizing:")) return message;
   if (message.startsWith("Best config:")) {
@@ -793,10 +903,12 @@ function renderCompare() {
   const allDB = runB.summary?.experiments?.Q_vs_AllD ?? {};
   const popA = runA.summary?.population ?? {};
   const popB = runB.summary?.population ?? {};
+  const leagueA = runA.summary?.league ?? {};
+  const leagueB = runB.summary?.league ?? {};
   const scoreA = deriveOverallScore(runA.summary);
   const scoreB = deriveOverallScore(runB.summary);
-  const modeA = runA.config?.learningMode === "prosocial" ? "Cooperative Q-learning" : "Classic Q-learning";
-  const modeB = runB.config?.learningMode === "prosocial" ? "Cooperative Q-learning" : "Classic Q-learning";
+  const modeA = learningModeLabel(runA.config?.learningMode);
+  const modeB = learningModeLabel(runB.config?.learningMode);
   const optA = runA.optimization?.bestScore ?? null;
   const optB = runB.optimization?.bestScore ?? null;
 
@@ -813,6 +925,8 @@ function renderCompare() {
     metricPair("Q-learning vs Always Defect: Trust Rate", allDA.tailCooperation, allDB.tailCooperation, { percent: true }),
     metricPair("Population Mode: Trust Rate", popA.tailCooperation, popB.tailCooperation, { percent: true }),
     metricPair("Population Mode: Reward", popA.tailReward, popB.tailReward),
+    metricPair("League Training: Tail Trust Rate", leagueA.tailCooperation, leagueB.tailCooperation, { percent: true }),
+    metricPair("League Score", leagueA.leagueScore, leagueB.leagueScore),
     `<article class="compare-card">
       <h4>Auto-Optimizer</h4>
       <p>Run A best score: ${optA === null ? "N/A" : Number(optA).toFixed(2)}</p>

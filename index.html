@@ -113,6 +113,7 @@
           <p class="muted">One click presets for non-technical users.</p>
           <button type="button" class="preset-btn" data-preset="first_run">First Run (Recommended)</button>
           <button type="button" class="preset-btn" data-preset="high_trust">Long-Term Trust</button>
+          <button type="button" class="preset-btn" data-preset="offline_best">Offline Best (OAQ)</button>
           <button type="button" class="preset-btn" data-preset="short_term">Short-Term Selfish</button>
           <button type="button" class="preset-btn" data-preset="high_noise">Miscommunication Stress Test</button>
         </aside>
@@ -171,7 +172,8 @@
                 Learning Mode
                 <select id="learningMode">
                   <option value="classic" selected>Classic Q-learning (baseline)</option>
-                  <option value="prosocial">Cooperative Q-learning (higher trust)</option>
+                  <option value="prosocial">Cooperative Q-learning (reward-sharing)</option>
+                  <option value="oaq">Opponent-Aware Q-learning (OAQ, offline best)</option>
                 </select>
                 <span class="hint">Cooperative mode learns from both self-reward and shared outcome.</span>
               </label>
@@ -233,6 +235,7 @@
                 <label><input type="checkbox" id="enablePopulation" checked /> Population mode (10 agents)</label>
                 <label><input type="checkbox" id="enableSweeps" checked /> Parameter sweeps (gamma/noise/memory)</label>
                 <label><input type="checkbox" id="enableTournament" checked /> Baseline strategy tournament</label>
+                <label><input type="checkbox" id="enableLeague" checked /> League training (mixed opponents)</label>
               </div>
             </fieldset>
 
@@ -271,6 +274,31 @@
       <h2>Run Summary</h2>
       <p class="section-intro">Fast interpretation of the latest run. Higher trust rate means more cooperation.</p>
       <div id="summaryCards" class="summary-grid"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Offline-Validated Baseline Snapshot</h2>
+      <p class="section-intro">Imported from the offline 10-seed robustness run (noise: 0%, 1%, 5%, 10%).</p>
+      <div class="compare-grid">
+        <article class="compare-card">
+          <h4>Tuned Q (baseline)</h4>
+          <p>Avg balanced score: <strong>56.29</strong></p>
+          <p>Avg Q vs Q trust: <strong>44.72%</strong></p>
+          <p>Avg population trust: <strong>46.87%</strong></p>
+        </article>
+        <article class="compare-card">
+          <h4>Tuned OAQ (offline best)</h4>
+          <p>Avg balanced score: <strong>65.61</strong></p>
+          <p>Avg Q vs Q trust: <strong>59.27%</strong></p>
+          <p>Avg population trust: <strong>55.07%</strong></p>
+        </article>
+        <article class="compare-card">
+          <h4>Delta (OAQ - Q)</h4>
+          <p>Balanced score: <strong>+9.32</strong></p>
+          <p>Q vs Q trust: <strong>+14.54 pts</strong></p>
+          <p>Population trust: <strong>+8.20 pts</strong></p>
+        </article>
+      </div>
     </section>
 
     <section class="panel">
@@ -330,6 +358,22 @@
       <h2>Advanced View: Q-Table</h2>
       <p class="section-intro">Internal state-action value map learned by a Q-learning agent.</p>
       <pre id="qTableView">Run an experiment to populate Q-values.</pre>
+    </section>
+
+    <section class="panel">
+      <h2>League Training (Mixed Opponents)</h2>
+      <p class="section-intro">The learner is trained against a rotating league (AllC, AllD, TFT, Grim, Random, Copykitten), then evaluated.</p>
+      <table id="leagueTable">
+        <thead>
+          <tr>
+            <th>Opponent</th>
+            <th>Trust Rate</th>
+            <th>Avg Reward</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p class="muted" id="leagueMeta">Run a simulation with League enabled to populate this table.</p>
     </section>
 
     <section class="panel" id="compare">

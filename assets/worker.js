@@ -42,7 +42,8 @@ function clamp(value, min, max, fallback = min) {
 }
 
 function normalizeConfig(rawConfig = {}) {
-  const learningMode = rawConfig.learningMode === "prosocial" ? "prosocial" : "classic";
+  const requestedMode = String(rawConfig.learningMode || "classic");
+  const learningMode = ["classic", "prosocial", "oaq"].includes(requestedMode) ? requestedMode : "classic";
   const prosocialWeight = clamp(rawConfig.prosocialWeight, 0, 0.8, 0);
   const negativeAlphaScale = clamp(rawConfig.negativeAlphaScale, 0.05, 1, 1);
   const coopBonus = clamp(rawConfig.coopBonus, 0, 0.3, 0);
@@ -64,16 +65,17 @@ function normalizeConfig(rawConfig = {}) {
     epsilonMin: clamp(rawConfig.epsilonMin, 0, 1, 0.02),
     seed,
     learningMode,
-    prosocialWeight: learningMode === "prosocial" ? prosocialWeight : 0,
+    prosocialWeight: learningMode === "classic" ? 0 : prosocialWeight,
     negativeAlphaScale,
-    coopBonus: learningMode === "prosocial" ? coopBonus : 0,
-    exploitPenalty: learningMode === "prosocial" ? exploitPenalty : 0,
+    coopBonus: learningMode === "classic" ? 0 : coopBonus,
+    exploitPenalty: learningMode === "classic" ? 0 : exploitPenalty,
     tieBreak,
     optimisticInit,
     experiments,
     enableSweeps: Boolean(rawConfig.enableSweeps),
     enableTournament: Boolean(rawConfig.enableTournament),
     enablePopulation: rawConfig.enablePopulation !== false,
+    enableLeague: Boolean(rawConfig.enableLeague),
   };
 }
 
@@ -210,26 +212,33 @@ function stateLabel(env, state) {
 
 function createQAgent(stateSize, cfg, rng, name = "Q") {
   const init = cfg.optimisticInit ?? 0;
-  const cooperateInit = cfg.learningMode === "prosocial" ? init + cfg.coopBonus * 2 : init;
-  const defectInit = cfg.learningMode === "prosocial" ? init - cfg.exploitPenalty : init;
+  const cooperativeMode = cfg.learningMode !== "classic";
+  const cooperateInit = cooperativeMode ? init + cfg.coopBonus * 2 : init;
+  const defectInit = cooperativeMode ? init - cfg.exploitPenalty : init;
   const q = Array.from({ length: stateSize }, () => [cooperateInit, defectInit]);
   let epsilon = cfg.epsilon;
+
+  function greedyAction(state) {
+    const row = q[state];
+    if (Math.abs(row[0] - row[1]) < 1e-10) {
+      if (cfg.tieBreak === "cooperate") return COOPERATE;
+      return rng() < 0.5 ? COOPERATE : DEFECT;
+    }
+    return row[0] > row[1] ? COOPERATE : DEFECT;
+  }
+
   return {
     type: "q",
+    learnerKind: "independent_q",
     name,
     reset() {},
     act(obs) {
       if (rng() < epsilon) return rng() < 0.5 ? COOPERATE : DEFECT;
-      const row = q[obs.state];
-      if (Math.abs(row[0] - row[1]) < 1e-10) {
-        if (cfg.tieBreak === "cooperate") return COOPERATE;
-        return rng() < 0.5 ? COOPERATE : DEFECT;
-      }
-      return row[0] > row[1] ? COOPERATE : DEFECT;
+      return greedyAction(obs.state);
     },
     observe(obs, action, reward, nextObs, done, aux = null) {
       let effectiveReward = reward;
-      if (cfg.learningMode === "prosocial" && aux) {
+      if (cfg.learningMode !== "classic" && aux) {
         const oppReward = Number(aux.opponentReward ?? reward);
         effectiveReward = (1 - cfg.prosocialWeight) * reward + cfg.prosocialWeight * oppReward;
         if (aux.ownAction === COOPERATE && aux.oppAction === COOPERATE) {
@@ -251,6 +260,22 @@ function createQAgent(stateSize, cfg, rng, name = "Q") {
     epsilon() {
       return epsilon;
     },
+    setEvaluationMode() {
+      epsilon = 0;
+    },
+    exportState() {
+      return {
+        q: q.map((row) => row.slice()),
+      };
+    },
+    importState(payload) {
+      if (!payload || !Array.isArray(payload.q)) return;
+      for (let s = 0; s < Math.min(stateSize, payload.q.length); s += 1) {
+        if (!Array.isArray(payload.q[s])) continue;
+        q[s][COOPERATE] = Number(payload.q[s][COOPERATE] ?? q[s][COOPERATE]);
+        q[s][DEFECT] = Number(payload.q[s][DEFECT] ?? q[s][DEFECT]);
+      }
+    },
     exportQTable(env) {
       return q.map((row, state) => ({
         state,
@@ -259,6 +284,137 @@ function createQAgent(stateSize, cfg, rng, name = "Q") {
         qDefect: row[DEFECT],
         preferred: row[COOPERATE] >= row[DEFECT] ? "C" : "D",
       }));
+    },
+  };
+}
+
+function createOAQAgent(stateSize, cfg, rng, name = "OAQ") {
+  const init = cfg.optimisticInit ?? 0;
+  const q = Array.from({ length: stateSize }, () =>
+    Array.from({ length: 2 }, () => [init, init])
+  );
+  // Cooperative initialization bias.
+  for (let s = 0; s < stateSize; s += 1) {
+    q[s][COOPERATE][COOPERATE] += cfg.coopBonus;
+    q[s][DEFECT][COOPERATE] -= cfg.exploitPenalty;
+  }
+  // responseCounts[state][myAction][oppAction]
+  const responseCounts = Array.from({ length: stateSize }, () =>
+    Array.from({ length: 2 }, () => [1, 1])
+  );
+
+  let epsilon = cfg.epsilon;
+
+  function predictedOppCoopProb(state, myAction) {
+    const row = responseCounts[state][myAction];
+    const denom = row[COOPERATE] + row[DEFECT];
+    if (denom <= 0) return 0.5;
+    return row[COOPERATE] / denom;
+  }
+
+  function expectedValue(state, myAction) {
+    const pOppC = predictedOppCoopProb(state, myAction);
+    return pOppC * q[state][myAction][COOPERATE] + (1 - pOppC) * q[state][myAction][DEFECT];
+  }
+
+  function greedyAction(state) {
+    const vCoop = expectedValue(state, COOPERATE);
+    const vDefect = expectedValue(state, DEFECT);
+    if (Math.abs(vCoop - vDefect) < 1e-10) {
+      if (cfg.tieBreak === "cooperate") return COOPERATE;
+      return rng() < 0.5 ? COOPERATE : DEFECT;
+    }
+    return vCoop > vDefect ? COOPERATE : DEFECT;
+  }
+
+  return {
+    type: "q",
+    learnerKind: "oaq",
+    name,
+    reset() {},
+    act(obs) {
+      if (rng() < epsilon) return rng() < 0.5 ? COOPERATE : DEFECT;
+      return greedyAction(obs.state);
+    },
+    observe(obs, action, reward, nextObs, done, aux = null) {
+      const oppAction = Number(aux?.oppAction);
+      if (oppAction !== COOPERATE && oppAction !== DEFECT) return;
+
+      responseCounts[obs.state][action][oppAction] += 1;
+
+      const oppReward = Number(aux?.opponentReward ?? reward);
+      let shapedReward = (1 - cfg.prosocialWeight) * reward + cfg.prosocialWeight * oppReward;
+      if (action === COOPERATE && oppAction === COOPERATE) {
+        shapedReward += cfg.coopBonus;
+      } else if (action === DEFECT && oppAction === COOPERATE) {
+        shapedReward -= cfg.exploitPenalty;
+      }
+
+      const current = q[obs.state][action][oppAction];
+      const nextBest = done
+        ? 0
+        : Math.max(expectedValue(nextObs.state, COOPERATE), expectedValue(nextObs.state, DEFECT));
+      const target = shapedReward + cfg.gamma * nextBest;
+      const tdError = target - current;
+      const lr = tdError < 0 ? cfg.alpha * cfg.negativeAlphaScale : cfg.alpha;
+      q[obs.state][action][oppAction] = current + lr * tdError;
+    },
+    endEpisode() {
+      epsilon = Math.max(cfg.epsilonMin, epsilon * cfg.epsilonDecay);
+    },
+    epsilon() {
+      return epsilon;
+    },
+    setEvaluationMode() {
+      epsilon = 0;
+    },
+    exportState() {
+      return {
+        q: q.map((byMyAction) => byMyAction.map((row) => row.slice())),
+        responseCounts: responseCounts.map((byMyAction) => byMyAction.map((row) => row.slice())),
+      };
+    },
+    importState(payload) {
+      if (!payload || !Array.isArray(payload.q)) return;
+      for (let s = 0; s < Math.min(stateSize, payload.q.length); s += 1) {
+        for (let myAction = 0; myAction < 2; myAction += 1) {
+          const row = payload.q[s]?.[myAction];
+          if (!Array.isArray(row)) continue;
+          q[s][myAction][COOPERATE] = Number(row[COOPERATE] ?? q[s][myAction][COOPERATE]);
+          q[s][myAction][DEFECT] = Number(row[DEFECT] ?? q[s][myAction][DEFECT]);
+        }
+      }
+      if (Array.isArray(payload.responseCounts)) {
+        for (let s = 0; s < Math.min(stateSize, payload.responseCounts.length); s += 1) {
+          for (let myAction = 0; myAction < 2; myAction += 1) {
+            const row = payload.responseCounts[s]?.[myAction];
+            if (!Array.isArray(row)) continue;
+            responseCounts[s][myAction][COOPERATE] = Math.max(
+              1,
+              Number(row[COOPERATE] ?? responseCounts[s][myAction][COOPERATE])
+            );
+            responseCounts[s][myAction][DEFECT] = Math.max(
+              1,
+              Number(row[DEFECT] ?? responseCounts[s][myAction][DEFECT])
+            );
+          }
+        }
+      }
+    },
+    exportQTable(env) {
+      return q.map((_row, state) => {
+        const qCooperate = expectedValue(state, COOPERATE);
+        const qDefect = expectedValue(state, DEFECT);
+        return {
+          state,
+          stateLabel: stateLabel(env, state),
+          qCooperate,
+          qDefect,
+          preferred: qCooperate >= qDefect ? "C" : "D",
+          pOppCooperateIfC: predictedOppCoopProb(state, COOPERATE),
+          pOppCooperateIfD: predictedOppCoopProb(state, DEFECT),
+        };
+      });
     },
   };
 }
@@ -305,7 +461,10 @@ function createHeuristicAgent(kind, rng, name = kind) {
 }
 
 function createAgent(agentKind, cfg, rng, stateSize, name) {
-  if (agentKind === "q") return createQAgent(stateSize, cfg, rng, name);
+  if (agentKind === "q") {
+    if (cfg.learningMode === "oaq") return createOAQAgent(stateSize, cfg, rng, name);
+    return createQAgent(stateSize, cfg, rng, name);
+  }
   return createHeuristicAgent(agentKind, rng, name);
 }
 
@@ -504,7 +663,7 @@ function runPopulation(config, seedOffset, progress) {
   const stateSize = 4 ** config.memory;
   const agents = [];
   for (let i = 0; i < nAgents; i += 1) {
-    agents.push(createQAgent(stateSize, config, rng, `Q_${i}`));
+    agents.push(createAgent("q", config, rng, stateSize, `Q_${i}`));
   }
   const env = new IPDEnvironment(config.memory, config.noise, rng);
   const series = [];
@@ -580,13 +739,198 @@ function runPopulation(config, seedOffset, progress) {
   };
 }
 
+const LEAGUE_OPPONENTS = ["allc", "alld", "random", "tft", "grim", "copykitten"];
+
+function emptyLeagueEvaluation() {
+  return LEAGUE_OPPONENTS.map((key) => ({
+    key,
+    opponent: key.toUpperCase(),
+    tailCooperation: 0,
+    tailReward: 0,
+  }));
+}
+
+function evaluateFrozenAgentVs(agentA, opponentKey, config, seedBase, stateSize, evalEpisodes, evalRounds, selfPlay = false) {
+  const rows = [];
+  for (let episode = 0; episode < evalEpisodes; episode += 1) {
+    const rngEpisode = makeRng(seedBase + episode * 1009);
+    const env = new IPDEnvironment(config.memory, config.noise, rngEpisode);
+    const evalA = createAgent("q", config, makeRng(seedBase + 17 + episode * 17), stateSize, "EvalA");
+    evalA.importState?.(agentA.exportState?.() ?? null);
+    evalA.setEvaluationMode?.();
+    evalA.reset?.();
+
+    let evalB = null;
+    if (selfPlay) {
+      evalB = createAgent("q", config, makeRng(seedBase + 33 + episode * 23), stateSize, "EvalB");
+      evalB.importState?.(agentA.exportState?.() ?? null);
+      evalB.setEvaluationMode?.();
+      evalB.reset?.();
+    } else {
+      evalB = createHeuristicAgent(opponentKey, makeRng(seedBase + 47 + episode * 31), opponentKey);
+      evalB.reset?.();
+    }
+
+    let state = env.reset();
+    const histA = [];
+    const histB = [];
+    let rewardA = 0;
+    let rewardB = 0;
+    let coopCount = 0;
+
+    for (let r = 0; r < evalRounds; r += 1) {
+      const obsA = { state, round: r, ownHistory: histA, opponentHistory: histB };
+      const obsB = { state, round: r, ownHistory: histB, opponentHistory: histA };
+      const actionA = evalA.act(obsA);
+      const actionB = evalB.act(obsB);
+      const step = env.step(actionA, actionB);
+      histA.push(step.execA);
+      histB.push(step.execB);
+      rewardA += step.rewardA;
+      rewardB += step.rewardB;
+      coopCount += (step.execA === COOPERATE ? 1 : 0) + (step.execB === COOPERATE ? 1 : 0);
+      state = step.nextState;
+    }
+
+    rows.push({
+      cooperation: coopCount / (2 * evalRounds),
+      reward: (rewardA + rewardB) / (2 * evalRounds),
+    });
+  }
+
+  return {
+    tailCooperation: rows.reduce((sum, row) => sum + row.cooperation, 0) / Math.max(1, rows.length),
+    tailReward: rows.reduce((sum, row) => sum + row.reward, 0) / Math.max(1, rows.length),
+  };
+}
+
+function runLeagueTraining(config, seedOffset, progress) {
+  const rng = makeRng(config.seed + seedOffset * 8111);
+  const stateSize = 4 ** config.memory;
+  const learner = createAgent("q", config, rng, stateSize, "LeagueLearner");
+  const trainEpisodes = Math.max(220, Math.floor(config.episodes * 0.6));
+  const evalEpisodes = Math.max(60, Math.min(220, Math.floor(config.episodes * 0.1)));
+  const rounds = Math.max(60, Math.min(config.rounds, 180));
+  const opponentCounts = Object.fromEntries(LEAGUE_OPPONENTS.map((key) => [key, 0]));
+  const trainingSeries = [];
+
+  for (let episode = 0; episode < trainEpisodes; episode += 1) {
+    const env = new IPDEnvironment(config.memory, config.noise, makeRng(config.seed + seedOffset * 997 + episode * 37));
+    const oppKey = LEAGUE_OPPONENTS[Math.floor(rng() * LEAGUE_OPPONENTS.length)];
+    opponentCounts[oppKey] += 1;
+    const opponent = createHeuristicAgent(oppKey, makeRng(config.seed + 300000 + episode * 53), oppKey);
+    learner.reset();
+    opponent.reset();
+
+    let state = env.reset();
+    const histA = [];
+    const histB = [];
+    let totalReward = 0;
+    let coopCount = 0;
+
+    for (let r = 0; r < rounds; r += 1) {
+      const obsA = { state, round: r, ownHistory: histA, opponentHistory: histB };
+      const obsB = { state, round: r, ownHistory: histB, opponentHistory: histA };
+      const actionA = learner.act(obsA);
+      const actionB = opponent.act(obsB);
+      const step = env.step(actionA, actionB);
+      const done = r === rounds - 1;
+      const nextObsA = {
+        state: step.nextState,
+        round: r + 1,
+        ownHistory: histA.concat(step.execA),
+        opponentHistory: histB.concat(step.execB),
+      };
+      learner.observe(obsA, actionA, step.rewardA, nextObsA, done, {
+        ownAction: step.execA,
+        oppAction: step.execB,
+        opponentReward: step.rewardB,
+      });
+      histA.push(step.execA);
+      histB.push(step.execB);
+      totalReward += step.rewardA;
+      coopCount += step.execA === COOPERATE ? 1 : 0;
+      state = step.nextState;
+    }
+
+    learner.endEpisode();
+    trainingSeries.push({
+      episode,
+      opponent: oppKey,
+      cooperation: coopCount / rounds,
+      reward: totalReward / rounds,
+    });
+    progress("Running league training...");
+  }
+
+  const evalRows = [];
+  const evalSelf = evaluateFrozenAgentVs(
+    learner,
+    "self",
+    config,
+    config.seed + seedOffset * 131 + 5000,
+    stateSize,
+    evalEpisodes,
+    rounds,
+    true
+  );
+  evalRows.push({ key: "self", opponent: "Self-play", ...evalSelf });
+  for (let i = 0; i < LEAGUE_OPPONENTS.length; i += 1) {
+    const key = LEAGUE_OPPONENTS[i];
+    const evalOut = evaluateFrozenAgentVs(
+      learner,
+      key,
+      config,
+      config.seed + seedOffset * 131 + 7000 + i * 211,
+      stateSize,
+      evalEpisodes,
+      rounds,
+      false
+    );
+    evalRows.push({
+      key,
+      opponent: key.toUpperCase(),
+      ...evalOut,
+    });
+    for (let ep = 0; ep < evalEpisodes; ep += 1) progress("Running league evaluation...");
+  }
+
+  const evalByKey = Object.fromEntries(evalRows.map((row) => [row.key, row]));
+  const leagueScore =
+    (0.45 * (evalByKey.self?.tailCooperation ?? 0) +
+      0.2 * (evalByKey.self?.tailReward ?? 0) / 3 +
+      0.15 * (evalByKey.tft?.tailCooperation ?? 0) +
+      0.1 * (1 - (evalByKey.alld?.tailCooperation ?? 0)) +
+      0.1 * (evalByKey.grim?.tailCooperation ?? 0)) *
+    100;
+
+  const tailWindow = Math.max(1, Math.floor(trainingSeries.length / 10));
+  const tailSlice = trainingSeries.slice(-tailWindow);
+  return {
+    trainingSummary: {
+      episodes: trainEpisodes,
+      rounds,
+      evalEpisodes,
+      opponentCounts,
+      tailCooperation:
+        tailSlice.reduce((sum, row) => sum + row.cooperation, 0) / Math.max(1, tailSlice.length),
+      tailReward: tailSlice.reduce((sum, row) => sum + row.reward, 0) / Math.max(1, tailSlice.length),
+    },
+    evaluation: evalRows,
+    leagueScore,
+  };
+}
+
 function estimateTotalSteps(config) {
   const sweepEpisodes = config.enableSweeps ? Math.max(180, Math.floor(config.episodes / 4)) : 0;
   const populationEpisodes = config.enablePopulation ? Math.max(160, Math.floor(config.episodes / 5)) : 0;
+  const leagueTrainEpisodes = config.enableLeague ? Math.max(220, Math.floor(config.episodes * 0.6)) : 0;
+  const leagueEvalEpisodes = config.enableLeague ? Math.max(60, Math.min(220, Math.floor(config.episodes * 0.1))) : 0;
   let totalSteps = config.experiments.length * config.episodes;
   if (config.enableSweeps) totalSteps += sweepEpisodes * (4 + 4 + 3);
   if (config.enablePopulation) totalSteps += populationEpisodes;
   if (config.enableTournament) totalSteps += 30;
+  if (config.enableLeague) totalSteps += leagueTrainEpisodes + leagueEvalEpisodes * LEAGUE_OPPONENTS.length;
   return Math.max(1, totalSteps);
 }
 
@@ -709,12 +1053,27 @@ function buildOptimizationCandidates(base, trials, rng) {
     tieBreak: "cooperate",
     optimisticInit: 0.9,
   });
+  // Offline best OAQ seed.
+  pushCandidate({
+    ...base,
+    alpha: 0.16,
+    gamma: 0.95,
+    epsilonDecay: 0.9994,
+    epsilonMin: 0,
+    learningMode: "oaq",
+    prosocialWeight: 0.4,
+    negativeAlphaScale: 0.5,
+    coopBonus: 0.02,
+    exploitPenalty: 0.1,
+    tieBreak: "cooperate",
+    optimisticInit: 0.8,
+  });
 
   const alphaVals = [0.03, 0.05, 0.08, 0.1, 0.12, 0.16];
   const gammaVals = [0.9, 0.95, 0.97, 0.99];
   const decayVals = [0.9988, 0.999, 0.9992, 0.9994, 0.9996];
   const epsilonMinVals = [0, 0.005, 0.01, 0.02, 0.03];
-  const modeVals = ["classic", "prosocial"];
+  const modeVals = ["classic", "prosocial", "oaq"];
   const prosocialVals = [0.1, 0.2, 0.3, 0.4];
   const negativeVals = [0.2, 0.35, 0.5, 0.7, 1];
   const coopBonusVals = [0, 0.02, 0.05, 0.08];
@@ -723,6 +1082,7 @@ function buildOptimizationCandidates(base, trials, rng) {
 
   while (candidates.length < trials) {
     const mode = sampleOne(modeVals, rng);
+    const cooperativeMode = mode !== "classic";
     const cfg = {
       ...base,
       alpha: sampleOne(alphaVals, rng),
@@ -730,12 +1090,12 @@ function buildOptimizationCandidates(base, trials, rng) {
       epsilonDecay: sampleOne(decayVals, rng),
       epsilonMin: sampleOne(epsilonMinVals, rng),
       learningMode: mode,
-      prosocialWeight: mode === "prosocial" ? sampleOne(prosocialVals, rng) : 0,
+      prosocialWeight: cooperativeMode ? sampleOne(prosocialVals, rng) : 0,
       negativeAlphaScale: sampleOne(negativeVals, rng),
-      coopBonus: mode === "prosocial" ? sampleOne(coopBonusVals, rng) : 0,
-      exploitPenalty: mode === "prosocial" ? sampleOne(exploitPenaltyVals, rng) : 0,
-      tieBreak: mode === "prosocial" ? "cooperate" : sampleOne(["random", "cooperate"], rng),
-      optimisticInit: mode === "prosocial" ? sampleOne(optimisticVals.slice(1), rng) : sampleOne(optimisticVals, rng),
+      coopBonus: cooperativeMode ? sampleOne(coopBonusVals, rng) : 0,
+      exploitPenalty: cooperativeMode ? sampleOne(exploitPenaltyVals, rng) : 0,
+      tieBreak: cooperativeMode ? "cooperate" : sampleOne(["random", "cooperate"], rng),
+      optimisticInit: cooperativeMode ? sampleOne(optimisticVals.slice(1), rng) : sampleOne(optimisticVals, rng),
     };
     pushCandidate(cfg);
   }
@@ -846,6 +1206,7 @@ function runOptimization(rawConfig, rawSearch) {
     enablePopulation: base.enablePopulation,
     enableSweeps: base.enableSweeps,
     enableTournament: base.enableTournament,
+    enableLeague: base.enableLeague,
   });
   const fullResult = runAll(finalConfig, { startPercent: 65, endPercent: 100, messagePrefix: "Best config" });
   const optimization = {
@@ -931,6 +1292,24 @@ function runAll(rawConfig, hooks = null) {
   let population = { series: [], summary: { tailCooperation: 0, tailReward: 0, episodes: 0 } };
   if (config.enablePopulation) {
     population = runPopulation(config, seedOffset, () => progress("Running population simulation..."));
+    seedOffset += 131;
+  }
+
+  let league = {
+    trainingSummary: {
+      episodes: 0,
+      rounds: 0,
+      evalEpisodes: 0,
+      opponentCounts: Object.fromEntries(LEAGUE_OPPONENTS.map((key) => [key, 0])),
+      tailCooperation: 0,
+      tailReward: 0,
+    },
+    evaluation: [{ key: "self", opponent: "Self-play", tailCooperation: 0, tailReward: 0 }, ...emptyLeagueEvaluation()],
+    leagueScore: 0,
+  };
+  if (config.enableLeague) {
+    league = runLeagueTraining(config, seedOffset, (msg) => progress(msg));
+    seedOffset += 173;
   }
 
   return {
@@ -941,9 +1320,15 @@ function runAll(rawConfig, hooks = null) {
     sweeps,
     tournament,
     population,
+    league,
     summary: {
       experiments: summaryExperiments,
       population: population.summary,
+      league: {
+        leagueScore: league.leagueScore,
+        tailCooperation: league.trainingSummary.tailCooperation,
+        tailReward: league.trainingSummary.tailReward,
+      },
       overallScore: computeOverallScore(summaryExperiments, population.summary),
     },
   };
