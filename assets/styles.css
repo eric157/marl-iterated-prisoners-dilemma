@@ -284,6 +284,16 @@ select {
   font: inherit;
 }
 
+input:disabled,
+select:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+label.is-disabled {
+  opacity: 0.62;
+}
+
 input:focus,
 select:focus {
   outline: 2px solid rgba(15, 139, 141, 0.35);
@@ -346,6 +356,14 @@ legend {
   margin-top: 0.92rem;
 }
 
+.optimizer-row {
+  margin-top: 0.68rem;
+}
+
+.optimizer-row label {
+  min-width: 220px;
+}
+
 .btn {
   border: 1px solid rgba(18, 50, 74, 0.24);
   border-radius: 8px;
@@ -366,6 +384,10 @@ legend {
   border-color: transparent;
   color: #fff;
   background: linear-gradient(100deg, #0f6a76, #0f8b8d);
+}
+
+.btn.primary.alt {
+  background: linear-gradient(102deg, #b87418, #d8891c);
 }
 
 .btn.ghost:hover:not(:disabled) {
@@ -412,6 +434,12 @@ legend {
   font-family: "Alegreya", serif;
   color: #124467;
   font-size: 1.02rem;
+}
+
+.summary-highlight {
+  border-width: 2px;
+  border-color: rgba(15, 139, 141, 0.4);
+  background: linear-gradient(160deg, rgba(15, 139, 141, 0.1), rgba(255, 255, 255, 0.82));
 }
 
 .chart-grid {

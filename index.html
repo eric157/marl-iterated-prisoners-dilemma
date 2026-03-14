@@ -60,6 +60,11 @@
           <p>Pick a starter mode, run once, change one variable, run again.</p>
           <p>Use side-by-side comparison to see what actually changed.</p>
         </article>
+        <article class="mini-card">
+          <h3>Want Better Performance Fast?</h3>
+          <p>Click <strong>Auto Optimize</strong> to test many settings automatically.</p>
+          <p>The dashboard then runs the best setup and explains the score.</p>
+        </article>
       </div>
     </section>
 
@@ -163,6 +168,47 @@
                 <span class="hint">Minimum randomness kept permanently.</span>
               </label>
               <label>
+                Learning Mode
+                <select id="learningMode">
+                  <option value="classic" selected>Classic Q-learning (baseline)</option>
+                  <option value="prosocial">Cooperative Q-learning (higher trust)</option>
+                </select>
+                <span class="hint">Cooperative mode learns from both self-reward and shared outcome.</span>
+              </label>
+              <label>
+                Prosocial Weight
+                <input type="number" id="prosocialWeight" min="0" max="0.8" step="0.01" value="0" />
+                <span class="hint">0 means selfish only. Higher values prioritize mutual payoff.</span>
+              </label>
+              <label>
+                Stability on Loss (negative alpha scale)
+                <input type="number" id="negativeAlphaScale" min="0.05" max="1" step="0.01" value="1" />
+                <span class="hint">Lower values reduce overreaction to bad rounds and stabilize trust.</span>
+              </label>
+              <label>
+                Mutual Cooperation Bonus
+                <input type="number" id="coopBonus" min="0" max="0.3" step="0.01" value="0" />
+                <span class="hint">Small shaping bonus when both cooperate.</span>
+              </label>
+              <label>
+                Exploitation Penalty
+                <input type="number" id="exploitPenalty" min="0" max="0.5" step="0.01" value="0" />
+                <span class="hint">Penalty when defecting against a cooperator.</span>
+              </label>
+              <label>
+                Tie-Break Rule
+                <select id="tieBreak">
+                  <option value="random" selected>Random on equal values</option>
+                  <option value="cooperate">Prefer cooperate on ties</option>
+                </select>
+                <span class="hint">How the agent decides when both actions look equally good.</span>
+              </label>
+              <label>
+                Optimistic Q Initialization
+                <input type="number" id="optimisticInit" min="-2" max="12" step="0.1" value="0" />
+                <span class="hint">Higher starts can encourage exploration toward cooperation.</span>
+              </label>
+              <label>
                 Random Seed
                 <input type="number" id="seed" min="1" max="999999999" value="42" />
                 <span class="hint">Use the same seed to replay similar runs.</span>
@@ -192,8 +238,24 @@
 
             <div class="row actions">
               <button class="btn primary" id="runBtn" type="submit">Start Simulation</button>
+              <button class="btn primary alt" id="optimizeBtn" type="button">Auto Optimize</button>
               <button class="btn ghost" id="cancelBtn" type="button" disabled>Cancel</button>
               <button class="btn ghost" id="downloadBtn" type="button" disabled>Download Results (JSON)</button>
+            </div>
+            <div class="row optimizer-row">
+              <label>
+                Optimizer Objective
+                <select id="optObjective">
+                  <option value="balanced" selected>Balanced (recommended)</option>
+                  <option value="cooperation">Maximum cooperation</option>
+                  <option value="reward">Maximum reward</option>
+                </select>
+              </label>
+              <label>
+                Optimizer Trials
+                <input type="number" id="optTrials" min="4" max="48" step="1" value="18" />
+                <span class="hint">More trials can find better settings but take longer.</span>
+              </label>
             </div>
           </form>
 

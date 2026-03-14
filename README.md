@@ -16,6 +16,7 @@ This repository is a **pure static web app** (perfect for GitHub Pages):
 - Simulations run directly in the browser (Web Worker)
 
 Users can adjust parameters, run experiments, compare runs side-by-side, and download results as JSON.
+The latest dashboard also includes **Auto Optimize** and a **Cooperative Q-learning mode** for stronger trust outcomes.
 
 ## Full Forms (Quick Glossary)
 
@@ -39,6 +40,10 @@ Users can adjust parameters, run experiments, compare runs side-by-side, and dow
   - baseline strategy tournament
   - parameter sweeps (gamma/noise/memory)
   - 10-agent population simulation
+- Switch between:
+  - Classic Q-learning (baseline)
+  - Cooperative Q-learning (prosocial training profile)
+- Use **Auto Optimize** to search multiple parameter combinations and automatically run the best one
 - Compare any two past runs side-by-side in the browser
 - Export a run as JSON
 
@@ -48,6 +53,7 @@ Users can adjust parameters, run experiments, compare runs side-by-side, and dow
 2. Keep defaults and click **Start Simulation** for a first run.
 3. Change one setting (for example, increase noise) and run again.
 4. Use **Run Comparison** to see how outcomes changed.
+5. Use **Auto Optimize** when you want the tool to search for a higher-performing setup automatically.
 
 ## What Happens in the Background
 
@@ -55,6 +61,12 @@ Users can adjust parameters, run experiments, compare runs side-by-side, and dow
 2. Rewards are assigned by the Prisoner's Dilemma payoff matrix.
 3. Learning agents update their Q-values after each round.
 4. Metrics (cooperation rate, reward trends, and summaries) are rendered as live charts.
+
+## New Performance Layer
+
+- `Run Quality Score` summarizes how healthy the run is across self-play, defensive behavior, and population behavior.
+- `Auto Optimize` tries multiple hyperparameter candidates, keeps the best-scoring setup, and then runs a full simulation with that setup.
+- `Cooperative Q-learning` can blend self-reward with shared reward to improve long-run cooperation in repeated interactions.
 
 ## Repository Structure
 

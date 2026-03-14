@@ -3,6 +3,7 @@ const STORAGE_KEY = "ipd_marl_runs_v1";
 const elements = {
   runForm: document.getElementById("runForm"),
   runBtn: document.getElementById("runBtn"),
+  optimizeBtn: document.getElementById("optimizeBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
   downloadBtn: document.getElementById("downloadBtn"),
   progressFill: document.getElementById("progressFill"),
@@ -23,6 +24,15 @@ const elements = {
   epsilon: document.getElementById("epsilon"),
   epsilonDecay: document.getElementById("epsilonDecay"),
   epsilonMin: document.getElementById("epsilonMin"),
+  learningMode: document.getElementById("learningMode"),
+  prosocialWeight: document.getElementById("prosocialWeight"),
+  negativeAlphaScale: document.getElementById("negativeAlphaScale"),
+  coopBonus: document.getElementById("coopBonus"),
+  exploitPenalty: document.getElementById("exploitPenalty"),
+  tieBreak: document.getElementById("tieBreak"),
+  optimisticInit: document.getElementById("optimisticInit"),
+  optTrials: document.getElementById("optTrials"),
+  optObjective: document.getElementById("optObjective"),
   seed: document.getElementById("seed"),
   enablePopulation: document.getElementById("enablePopulation"),
   enableSweeps: document.getElementById("enableSweeps"),
@@ -82,6 +92,13 @@ const PRESET_CONFIGS = {
     epsilon: 1,
     epsilonDecay: 0.9992,
     epsilonMin: 0.02,
+    learningMode: "classic",
+    prosocialWeight: 0,
+    negativeAlphaScale: 1,
+    coopBonus: 0,
+    exploitPenalty: 0,
+    tieBreak: "random",
+    optimisticInit: 0,
     enablePopulation: true,
     enableSweeps: true,
     enableTournament: true,
@@ -95,7 +112,14 @@ const PRESET_CONFIGS = {
     gamma: 0.99,
     epsilon: 1,
     epsilonDecay: 0.9994,
-    epsilonMin: 0.02,
+    epsilonMin: 0.01,
+    learningMode: "prosocial",
+    prosocialWeight: 0.2,
+    negativeAlphaScale: 0.35,
+    coopBonus: 0.05,
+    exploitPenalty: 0.06,
+    tieBreak: "cooperate",
+    optimisticInit: 0.9,
     enablePopulation: true,
     enableSweeps: true,
     enableTournament: true,
@@ -110,6 +134,13 @@ const PRESET_CONFIGS = {
     epsilon: 1,
     epsilonDecay: 0.999,
     epsilonMin: 0.03,
+    learningMode: "classic",
+    prosocialWeight: 0,
+    negativeAlphaScale: 1,
+    coopBonus: 0,
+    exploitPenalty: 0,
+    tieBreak: "random",
+    optimisticInit: 0,
     enablePopulation: true,
     enableSweeps: true,
     enableTournament: true,
@@ -124,6 +155,13 @@ const PRESET_CONFIGS = {
     epsilon: 1,
     epsilonDecay: 0.9992,
     epsilonMin: 0.02,
+    learningMode: "prosocial",
+    prosocialWeight: 0.18,
+    negativeAlphaScale: 0.4,
+    coopBonus: 0.03,
+    exploitPenalty: 0.05,
+    tieBreak: "cooperate",
+    optimisticInit: 0.6,
     enablePopulation: true,
     enableSweeps: true,
     enableTournament: true,
@@ -146,17 +184,20 @@ function init() {
   initCharts();
   loadHistory();
   bindEvents();
+  syncLearningControls();
   setProgress(0, "Idle");
   renderCompare();
 }
 
 function bindEvents() {
   elements.runForm.addEventListener("submit", onRun);
+  elements.optimizeBtn.addEventListener("click", onOptimize);
   elements.cancelBtn.addEventListener("click", cancelRun);
   elements.downloadBtn.addEventListener("click", downloadLastResult);
   elements.experimentSelect.addEventListener("change", renderSelectedExperiment);
   elements.compareA.addEventListener("change", renderCompare);
   elements.compareB.addEventListener("change", renderCompare);
+  elements.learningMode.addEventListener("change", syncLearningControls);
   elements.presetButtons.forEach((btn) => {
     btn.addEventListener("click", () => applyPreset(btn.dataset.preset));
   });
@@ -179,6 +220,13 @@ function getRunConfig() {
     epsilon: Number(elements.epsilon.value),
     epsilonDecay: Number(elements.epsilonDecay.value),
     epsilonMin: Number(elements.epsilonMin.value),
+    learningMode: String(elements.learningMode.value),
+    prosocialWeight: Number(elements.prosocialWeight.value),
+    negativeAlphaScale: Number(elements.negativeAlphaScale.value),
+    coopBonus: Number(elements.coopBonus.value),
+    exploitPenalty: Number(elements.exploitPenalty.value),
+    tieBreak: String(elements.tieBreak.value),
+    optimisticInit: Number(elements.optimisticInit.value),
     seed: Number(elements.seed.value),
     experiments: getSelectedExperiments(),
     enablePopulation: elements.enablePopulation.checked,
@@ -198,6 +246,41 @@ function validateConfig(cfg) {
   if (cfg.memory < 1 || cfg.memory > 5) {
     throw new Error("Memory must be in [1,5].");
   }
+  if (!["classic", "prosocial"].includes(cfg.learningMode)) {
+    throw new Error("Learning mode must be classic or prosocial.");
+  }
+  if (cfg.learningMode === "prosocial" && (cfg.prosocialWeight < 0 || cfg.prosocialWeight > 0.8)) {
+    throw new Error("Prosocial weight must be in [0, 0.8].");
+  }
+}
+
+function getOptimizationSearch() {
+  const trials = Number(elements.optTrials.value);
+  const objective = String(elements.optObjective.value || "balanced");
+  return {
+    trials: Number.isFinite(trials) ? trials : 18,
+    objective: ["balanced", "cooperation", "reward"].includes(objective) ? objective : "balanced",
+  };
+}
+
+function syncLearningControls() {
+  const prosocial = elements.learningMode.value === "prosocial";
+  const ids = ["prosocialWeight", "negativeAlphaScale", "coopBonus", "exploitPenalty"];
+  ids.forEach((id) => {
+    const el = elements[id];
+    if (!el) return;
+    el.disabled = !prosocial;
+    el.closest("label")?.classList.toggle("is-disabled", !prosocial);
+  });
+  if (!prosocial) {
+    elements.prosocialWeight.value = "0";
+    elements.negativeAlphaScale.value = "1";
+    elements.coopBonus.value = "0";
+    elements.exploitPenalty.value = "0";
+    if (elements.tieBreak.value === "cooperate") {
+      elements.tieBreak.value = "random";
+    }
+  }
 }
 
 function onRun(event) {
@@ -209,6 +292,18 @@ function onRun(event) {
     startRun(cfg);
   } catch (err) {
     setProgress(0, `Cannot start: ${err.message}`);
+  }
+}
+
+function onOptimize() {
+  if (state.running) return;
+  try {
+    const cfg = getRunConfig();
+    const search = getOptimizationSearch();
+    validateConfig(cfg);
+    startOptimize(cfg, search);
+  } catch (err) {
+    setProgress(0, `Cannot optimize: ${err.message}`);
   }
 }
 
@@ -224,10 +319,30 @@ function startRun(config) {
   };
   state.running = true;
   elements.runBtn.disabled = true;
+  elements.optimizeBtn.disabled = true;
   elements.cancelBtn.disabled = false;
   elements.downloadBtn.disabled = true;
   setProgress(0, "Starting simulation...");
   state.worker.postMessage({ type: "run", config });
+}
+
+function startOptimize(config, search) {
+  if (state.worker) {
+    state.worker.terminate();
+  }
+  state.worker = new Worker("assets/worker.js");
+  state.worker.onmessage = handleWorkerMessage;
+  state.worker.onerror = (err) => {
+    setProgress(0, `Worker failed: ${err.message}`);
+    finishRun(false);
+  };
+  state.running = true;
+  elements.runBtn.disabled = true;
+  elements.optimizeBtn.disabled = true;
+  elements.cancelBtn.disabled = false;
+  elements.downloadBtn.disabled = true;
+  setProgress(1, "Launching auto-optimizer...");
+  state.worker.postMessage({ type: "optimize", config, search });
 }
 
 function cancelRun() {
@@ -241,6 +356,7 @@ function cancelRun() {
 function finishRun(success) {
   state.running = false;
   elements.runBtn.disabled = false;
+  elements.optimizeBtn.disabled = false;
   elements.cancelBtn.disabled = true;
   elements.downloadBtn.disabled = !success || !state.lastResult;
 }
@@ -262,6 +378,18 @@ function handleWorkerMessage(event) {
     renderResult(payload.result);
     appendRunHistory(payload.result);
     setProgress(100, "Completed.");
+    finishRun(true);
+    return;
+  }
+  if (payload.type === "optimized") {
+    const result = payload.result ?? {};
+    if (payload.optimization && !result.optimization) {
+      result.optimization = payload.optimization;
+    }
+    state.lastResult = result;
+    renderResult(result);
+    appendRunHistory(result);
+    setProgress(100, "Optimization completed.");
     finishRun(true);
   }
 }
@@ -326,6 +454,16 @@ function renderResult(result) {
 
 function renderSummary(result) {
   const entries = Object.entries(result.summary?.experiments ?? {});
+  const overall = Number(result.summary?.overallScore ?? 0);
+  const mode = result.config?.learningMode ?? "classic";
+  const headCard = `
+    <article class="summary-card summary-highlight">
+      <h4>Run Quality Score</h4>
+      <p><strong>${overall.toFixed(2)} / 100</strong></p>
+      <p>Learning mode: ${mode === "prosocial" ? "Cooperative Q-learning" : "Classic Q-learning"}</p>
+      <p>${overall >= 72 ? "Strong long-run cooperation profile." : overall >= 55 ? "Moderate cooperation profile." : "Defection pressure remains high."}</p>
+    </article>
+  `;
   const cards = entries
     .map(([name, metrics]) => {
       const coop = Number(metrics.tailCooperation ?? 0);
@@ -355,7 +493,20 @@ function renderSummary(result) {
       </article>
     `
       : "";
-  elements.summaryCards.innerHTML = cards + popCard;
+  const opt = result.optimization;
+  const optCard = opt
+    ? `
+      <article class="summary-card">
+        <h4>Auto-Optimizer Result</h4>
+        <p>Objective: ${formatObjective(opt.objective)}</p>
+        <p>Trials tested: ${opt.trials}</p>
+        <p>Best search score: ${Number(opt.bestScore ?? 0).toFixed(2)}</p>
+        <p>Best mode: ${opt.bestConfig?.learningMode === "prosocial" ? "Cooperative Q-learning" : "Classic Q-learning"}</p>
+        <p>alpha=${Number(opt.bestConfig?.alpha ?? 0).toFixed(3)}, gamma=${Number(opt.bestConfig?.gamma ?? 0).toFixed(3)}</p>
+      </article>
+    `
+    : "";
+  elements.summaryCards.innerHTML = headCard + cards + popCard + optCard;
 }
 
 function renderExperimentSelector(result) {
@@ -481,6 +632,7 @@ function appendRunHistory(result) {
     createdAt: result.generatedAt,
     config: result.config,
     summary: result.summary,
+    optimization: result.optimization ?? null,
   };
   state.runHistory = [entry, ...state.runHistory.filter((r) => r.id !== entry.id)].slice(0, 30);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.runHistory));
@@ -501,11 +653,41 @@ function refreshCompareSelectors() {
 function formatRunLabel(run) {
   const t = new Date(run.createdAt);
   const stamp = Number.isNaN(t.getTime()) ? run.id : t.toLocaleString();
-  return `${stamp} | ep:${run.config.episodes}, rounds:${run.config.rounds}, noise:${run.config.noise}`;
+  const mode = run.config?.learningMode === "prosocial" ? "coop-Q" : "classic-Q";
+  const score = deriveOverallScore(run.summary).toFixed(1);
+  return `${stamp} | ${mode} | score:${score} | ep:${run.config.episodes}, rounds:${run.config.rounds}, noise:${run.config.noise}`;
 }
 
 function getRunById(id) {
   return state.runHistory.find((run) => run.id === id);
+}
+
+function deriveOverallScore(summary) {
+  if (!summary) return 0;
+  const stored = Number(summary.overallScore);
+  if (Number.isFinite(stored) && stored > 0) return stored;
+
+  const ex = summary.experiments ?? {};
+  const pop = summary.population ?? {};
+  const qvq = ex.Q_vs_Q ?? {};
+  const qvtft = ex.Q_vs_TFT ?? {};
+  const qalld = ex.Q_vs_AllD ?? {};
+  const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+  const qvqCoop = clamp01(qvq.tailCooperation);
+  const qvqRewardNorm = clamp01((Number(qvq.tailReward) || 0) / 3);
+  const qvtftCoop = clamp01(qvtft.tailCooperation);
+  const qalldCoop = clamp01(qalld.tailCooperation);
+  const popCoop = clamp01(pop.tailCooperation);
+  const popRewardNorm = clamp01((Number(pop.tailReward) || 0) / 3);
+  return (
+    (0.38 * qvqCoop +
+      0.18 * qvqRewardNorm +
+      0.18 * qvtftCoop +
+      0.08 * (1 - qalldCoop) +
+      0.12 * popCoop +
+      0.06 * popRewardNorm) *
+    100
+  );
 }
 
 function metricPair(name, a, b, options = {}) {
@@ -540,9 +722,17 @@ function applyPreset(presetKey) {
   elements.epsilon.value = preset.epsilon;
   elements.epsilonDecay.value = preset.epsilonDecay;
   elements.epsilonMin.value = preset.epsilonMin;
+  elements.learningMode.value = preset.learningMode;
+  elements.prosocialWeight.value = preset.prosocialWeight;
+  elements.negativeAlphaScale.value = preset.negativeAlphaScale;
+  elements.coopBonus.value = preset.coopBonus;
+  elements.exploitPenalty.value = preset.exploitPenalty;
+  elements.tieBreak.value = preset.tieBreak;
+  elements.optimisticInit.value = preset.optimisticInit;
   elements.enablePopulation.checked = preset.enablePopulation;
   elements.enableSweeps.checked = preset.enableSweeps;
   elements.enableTournament.checked = preset.enableTournament;
+  syncLearningControls();
   setProgress(0, `Preset loaded: ${presetLabel(presetKey)}. Click Start Simulation.`);
 }
 
@@ -552,6 +742,12 @@ function presetLabel(key) {
   if (key === "short_term") return "Short-Term Selfish";
   if (key === "high_noise") return "Miscommunication Stress Test";
   return key;
+}
+
+function formatObjective(objective) {
+  if (objective === "cooperation") return "Max cooperation";
+  if (objective === "reward") return "Max reward";
+  return "Balanced";
 }
 
 function interpretTrust(value) {
@@ -576,6 +772,11 @@ function friendlyProgressMessage(message) {
     "Running baseline tournament...": "Running strategy tournament...",
     "Running population simulation...": "Running population simulation...",
   };
+  if (message.startsWith("Auto-optimizing:")) return message;
+  if (message.startsWith("Best config:")) {
+    const raw = message.replace("Best config: ", "");
+    return `Final best-config validation: ${map[raw] ?? raw}`;
+  }
   return map[message] ?? message;
 }
 
@@ -592,13 +793,32 @@ function renderCompare() {
   const allDB = runB.summary?.experiments?.Q_vs_AllD ?? {};
   const popA = runA.summary?.population ?? {};
   const popB = runB.summary?.population ?? {};
+  const scoreA = deriveOverallScore(runA.summary);
+  const scoreB = deriveOverallScore(runB.summary);
+  const modeA = runA.config?.learningMode === "prosocial" ? "Cooperative Q-learning" : "Classic Q-learning";
+  const modeB = runB.config?.learningMode === "prosocial" ? "Cooperative Q-learning" : "Classic Q-learning";
+  const optA = runA.optimization?.bestScore ?? null;
+  const optB = runB.optimization?.bestScore ?? null;
 
   elements.compareMetrics.innerHTML = [
+    metricPair("Overall Run Quality Score", scoreA, scoreB),
+    `<article class="compare-card">
+      <h4>Learning Mode</h4>
+      <p>Run A: ${modeA}</p>
+      <p>Run B: ${modeB}</p>
+      <p>${modeA === modeB ? "Both runs used the same learning mode." : "Different learning modes were used."}</p>
+    </article>`,
     metricPair("Q-learning vs Q-learning: Trust Rate", qA.tailCooperation, qB.tailCooperation, { percent: true }),
     metricPair("Q-learning vs Q-learning: Reward", qA.tailReward, qB.tailReward),
     metricPair("Q-learning vs Always Defect: Trust Rate", allDA.tailCooperation, allDB.tailCooperation, { percent: true }),
     metricPair("Population Mode: Trust Rate", popA.tailCooperation, popB.tailCooperation, { percent: true }),
     metricPair("Population Mode: Reward", popA.tailReward, popB.tailReward),
+    `<article class="compare-card">
+      <h4>Auto-Optimizer</h4>
+      <p>Run A best score: ${optA === null ? "N/A" : Number(optA).toFixed(2)}</p>
+      <p>Run B best score: ${optB === null ? "N/A" : Number(optB).toFixed(2)}</p>
+      <p>Only available when Auto Optimize was used.</p>
+    </article>`,
   ].join("");
 }
 
